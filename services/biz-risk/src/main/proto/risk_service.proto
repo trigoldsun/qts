@@ -1,0 +1,93 @@
+// Risk Service Proto Definition
+// gRPC service for risk rule evaluation
+
+syntax = "proto3";
+
+package com.qts.biz.risk;
+
+option java_multiple_files = true;
+option java_package = "com.qts.biz.risk.grpc";
+option java_outer_classname = "RiskServiceProto";
+
+// Risk Check Request
+message RiskCheckRequestProto {
+  string account_id = 1;
+  string symbol = 2;
+  string side = 3;  // BUY or SELL
+  double price = 4;
+  int32 quantity = 5;
+  double order_amount = 6;
+  double total_asset_value = 7;
+  double daily_buy_amount = 8;
+  double daily_sell_amount = 9;
+  double daily_profit_loss = 10;
+}
+
+// Risk Check Response
+message RiskCheckResponseProto {
+  bool passed = 1;
+  string account_id = 2;
+  string message = 3;
+  string reject_code = 4;
+  repeated RuleCheckResultProto rule_results = 5;
+}
+
+// Individual Rule Check Result
+message RuleCheckResultProto {
+  string rule_id = 1;
+  string rule_name = 2;
+  string rule_type = 3;
+  bool passed = 4;
+  string detail = 5;
+}
+
+// Rule Configuration
+message RuleConfigProto {
+  string rule_id = 1;
+  string rule_name = 2;
+  string rule_type = 3;
+  string status = 4;  // ACTIVE, INACTIVE, SUSPENDED
+  int32 priority = 5;  // 1-100
+  string logic_operator = 6;  // AND, OR
+  string parameters_json = 7;
+  string description = 8;
+}
+
+// Risk Service gRPC Definition
+service RiskService {
+  // Perform risk check for an order
+  rpc CheckRisk(RiskCheckRequestProto) returns (RiskCheckResponseProto);
+  
+  // Get all rule configurations
+  rpc GetAllRules(GetAllRulesRequest) returns (GetAllRulesResponse);
+  
+  // Reload rules from storage
+  rpc ReloadRules(ReloadRulesRequest) returns (ReloadRulesResponse);
+  
+  // Upsert a rule configuration
+  rpc UpsertRule(RuleConfigProto) returns (UpsertRuleResponse);
+  
+  // Remove a rule configuration
+  rpc RemoveRule(RemoveRuleRequest) returns (RemoveRuleResponse);
+}
+
+message GetAllRulesRequest {}
+message GetAllRulesResponse {
+  repeated RuleConfigProto rules = 1;
+}
+message ReloadRulesRequest {}
+message ReloadRulesResponse {
+  bool success = 1;
+  string message = 2;
+}
+message UpsertRuleResponse {
+  bool success = 1;
+  string message = 2;
+}
+message RemoveRuleRequest {
+  string rule_id = 1;
+}
+message RemoveRuleResponse {
+  bool success = 1;
+  string message = 2;
+}
