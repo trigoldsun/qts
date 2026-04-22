@@ -45,11 +45,13 @@ class NetBuyLimitRuleTest {
         request.setAccountId("ACC001");
         request.setSymbol("000001");
         request.setSide("BUY");
-        request.setPrice(new BigDecimal("10.0"));
-        request.setQuantity(100);
+        request.setPrice(new BigDecimal("20.0"));
+        request.setQuantity(200); // orderAmount = 4000 (4%)
         request.setTotalAssetValue(new BigDecimal("100000")); // 10万
         request.setDailyBuyAmount(new BigDecimal("8000")); // 8% already bought
         request.setDailySellAmount(new BigDecimal("1000")); // 1% sold
+        // current net buy = 8000-1000 = 7000 (7%)
+        // after order: 7000 + 4000 = 11000 (11%) > 10% → should FAIL
 
         RuleResult result = rule.evaluate(request);
         
