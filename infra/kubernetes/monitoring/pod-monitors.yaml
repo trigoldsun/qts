@@ -1,0 +1,45 @@
+# QTS PodMonitor Configurations for JVM and Custom Metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: biz-risk-jvm-monitor
+  namespace: qts-dev
+  labels:
+    app: qts
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qts
+      component: biz-risk
+  podMetricsEndpoints:
+    - port: management
+      path: /actuator/prometheus
+      interval: 10s
+      scrapeTimeout: 5s
+  namespaceSelector:
+    matchNames:
+      - qts-dev
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: market-service-jvm-monitor
+  namespace: qts-dev
+  labels:
+    app: qts
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qts
+      component: market-service
+  podMetricsEndpoints:
+    - port: management
+      path: /actuator/prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - qts-dev

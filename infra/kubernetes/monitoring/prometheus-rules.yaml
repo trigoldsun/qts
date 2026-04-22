@@ -1,0 +1,274 @@
+# QTS Prometheus Alert Rules
+groups:
+  # =============================================================================
+  # QTS Trading System Alerts - Critical Business Metrics
+  # SLO: 99.99% availability, P99 latency <= 10ms
+  # =============================================================================
+  - name: qts_trading_core
+    interval: 30s
+    rules:
+      # -----------------------------------------------------------------------------
+      # Trading Core - Order Processing
+      # -----------------------------------------------------------------------------
+      - alert: QTSOrderLatencyHigh
+        expr: histogram_quantile(0.99, rate(biz_trade_order_duration_seconds_bucket[5m])) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          component: biz-trade
+        annotations:
+          summary: "QTS Order P99 latency exceeds 10ms SLA"
+          description: "Order processing P99 latency is {{ $value | humanizeDuration }}, SLA is 10ms"
+          runbook_url: "https://wiki.qts.com/runbooks/order-latency"
+
+      - alert: QTSOrderErrorRateHigh
+        expr: rate(biz_trade_order_total{status="error"}[5m]) / rate(biz_trade_order_total[5m]) > 0.001
+        for: 5m
+        labels:
+          severity: critical
+          component: biz-trade
+        annotations:
+          summary: "QTS Order error rate exceeds 0.1%"
+          description: "Order error rate is {{ $value | humanizePercentage }}"
+
+      - alert: QTSOrderSuccessRateLow
+        expr: rate(biz_trade_order_total{status="success"}[5m]) / rate(biz_trade_order_total[5m]) < 0.995
+        for: 5m
+        labels:
+          severity: critical
+          component: biz-trade
+        annotations:
+          summary: "QTS Order success rate below 99.5% SLA"
+          description: "Order success rate is {{ $value | humanizePercentage }}"
+
+      - alert: QTSOrderQueueDepthHigh
+        expr: biz_trade_order_queue_depth > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: biz-trade
+        annotations:
+          summary: "QTS Order queue depth is high"
+          description: "Order queue has {{ $value }} pending orders"
+
+  # -----------------------------------------------------------------------------
+  # Risk Engine
+  # -----------------------------------------------------------------------------
+  - name: qts_risk_engine
+    interval: 30s
+    rules:
+      - alert: QTSRiskPreCheckLatencyHigh
+        expr: histogram_quantile(0.99, rate(biz_risk_precheck_duration_seconds_bucket[5m])) > 0.005
+        for: 2m
+        labels:
+          severity: critical
+          component: biz-risk
+        annotations:
+          summary: "QTS Risk pre-check P99 latency exceeds 5ms SLA"
+          description: "Risk pre-check P99 latency is {{ $value | humanizeDuration }}, SLA is 5ms"
+          runbook_url: "https://wiki.qts.com/runbooks/risk-latency"
+
+      - alert: QTSRiskPreCheckErrorRateHigh
+        expr: rate(biz_risk_precheck_total{result="reject"}[5m]) / rate(biz_risk_precheck_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          component: biz-risk
+        annotations:
+          summary: "QTS Risk rejection rate is elevated"
+          description: "Risk rejection rate is {{ $value | humanizePercentage }}"
+
+      - alert: QTSRiskCircuitBreakerOpen
+        expr: biz_risk_circuit_breaker_state == 2
+        for: 1m
+        labels:
+          severity: critical
+          component: biz-risk
+        annotations:
+          summary: "QTS Risk circuit breaker is OPEN"
+          description: "Risk engine circuit breaker has opened, blocking orders"
+          runbook_url: "https://wiki.qts.com/runbooks/circuit-breaker"
+
+      - alert: QTSRiskAuditLogBacklog
+        expr: rate(biz_risk_audit_log_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: biz-risk
+        annotations:
+          summary: "QTS Risk audit log write failures"
+          description: "Risk audit log has {{ $value }} errors/sec"
+
+  # -----------------------------------------------------------------------------
+  # Market Data
+  # -----------------------------------------------------------------------------
+  - name: qts_market_data
+    interval: 30s
+    rules:
+      - alert: QTSMarketDataLatencyHigh
+        expr: histogram_quantile(0.99, rate(market_service_quote_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: market-service
+        annotations:
+          summary: "QTS Market data latency exceeds 1s SLA"
+          description: "Market quote P99 latency is {{ $value | humanizeDuration }}"
+
+      - alert: QTSMarketDataFeedDisconnected
+        expr: market_service_feed_connected == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: market-service
+        annotations:
+          summary: "QTS Market data feed is disconnected"
+          description: "Market data feed has been disconnected for {{ $value }} minutes"
+          runbook_url: "https://wiki.qts.com/runbooks/market-feed"
+
+      - alert: QTSMarketDataStale
+        expr: time() - market_service_last_quote_timestamp > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: market-service
+        annotations:
+          summary: "QTS Market data is stale"
+          description: "No market quotes received for {{ $value }} seconds"
+
+  # =============================================================================
+  # Application Layer
+  # =============================================================================
+  - name: qts_application
+    interval: 30s
+    rules:
+      - alert: QTSHTTPErrorRateHigh
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QTS HTTP 5xx error rate is above 1%"
+          description: "HTTP 5xx rate is {{ $value | humanizePercentage }}"
+
+      - alert: QTSServiceLatencyHigh
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QTS Service P99 latency is high"
+          description: "Service P99 latency is {{ $value | humanizeDuration }}"
+
+      - alert: QTSAPIGatewayDown
+        expr: up{job="qts-api-gateway"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api-gateway
+        annotations:
+          summary: "QTS API Gateway is down"
+          description: "API Gateway has been unreachable for {{ $value }} minutes"
+          runbook_url: "https://wiki.qts.com/runbooks/api-gateway"
+
+  # =============================================================================
+  # Kubernetes Resources
+  # =============================================================================
+  - name: qts_kubernetes_resources
+    interval: 30s
+    rules:
+      - alert: QTSPodNotReady
+        expr: kube_pod_status_ready{condition="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "QTS Pod {{ $labels.namespace }}/{{ $labels.pod }} is not ready"
+          description: "Pod has been not ready for more than 5 minutes"
+
+      - alert: QTSPodRestartingTooMuch
+        expr: increase(kube_pod_container_status_restarts_total[1h]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QTS Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently"
+          description: "Pod has restarted {{ $value }} times in the last hour"
+
+      - alert: QTSDeploymentReplicasMismatch
+        expr: kube_deployment_spec_replicas != kube_deployment_status_replicas_available
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QTS Deployment {{ $labels.namespace }}/{{ $labels.deployment }} replicas mismatch"
+          description: "Expected {{ $labels.replicas }} replicas, only {{ $value }} available"
+
+      - alert: QTSHPAMaxReplicasReached
+        expr: kube_hpa_status_current_replicas == kube_hpa_spec_max_replicas
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QTS HPA {{ $labels.namespace }}/{{ $labels.hpa }} at maximum capacity"
+          description: "HPA has reached max replicas {{ $value }}"
+
+      - alert: QTSHighCPUUsage
+        expr: sum(rate(container_cpu_usage_seconds_total{namespace=~"qts-.*"}[5m])) by (namespace, pod) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QTS Pod {{ $labels.namespace }}/{{ $labels.pod }} CPU usage above 90%"
+          description: "CPU usage at {{ $value | humanizePercentage }}"
+
+      - alert: QTSHighMemoryUsage
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QTS Pod {{ $labels.namespace }}/{{ $labels.pod }} memory usage above 90%"
+          description: "Memory usage at {{ $value | humanizePercentage }}"
+
+  # =============================================================================
+  # Infrastructure
+  # =============================================================================
+  - name: qts_infrastructure
+    interval: 60s
+    rules:
+      - alert: QTSNodeMemoryPressure
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.instance }} memory pressure"
+          description: "Node memory usage at {{ $value | humanizePercentage }}"
+
+      - alert: QTSNodeDiskPressure
+        expr: (1 - node_filesystem_avail_bytes / node_filesystem_size_bytes{mountpoint="/"}) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.instance }} disk space low"
+          description: "Node disk usage at {{ $value | humanizePercentage }}"
+
+      - alert: QTSNodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.node }} is not ready"
+          description: "Node has been not ready for {{ $value }} minutes"
+
+      - alert: QTSKubeAPIServerLatency
+        expr: histogram_quantile(0.99, rate(apiserver_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kubernetes API server latency is high"
+          description: "API server P99 latency is {{ $value | humanizeDuration }}"

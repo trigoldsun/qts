@@ -1,0 +1,115 @@
+# QTS AlertManager Configuration
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'smtp.example.com:587'
+  smtp_from: 'qts-alerts@example.com'
+  smtp_auth_username: 'qts-alerts'
+  smtp_auth_password: 'CHANGE_ME'
+
+route:
+  group_by: ['alertname', 'severity', 'namespace']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'qts-team'
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'qts-critical'
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Trading alerts - special routing
+    - match:
+        component: biz-trade
+        severity: critical
+      receiver: 'qts-trading-desk'
+      continue: true
+    
+    - match:
+        component: biz-risk
+        severity: critical
+      receiver: 'qts-risk-management'
+      continue: true
+    
+    # Market data alerts
+    - match:
+        component: market-service
+      receiver: 'qts-market-data'
+      continue: true
+
+receivers:
+  # Main team receiver
+  - name: 'qts-team'
+    email_configs:
+      - to: 'qts-team@example.com'
+        send_resolved: true
+        headers:
+          subject: '[QTS] {{ .GroupLabels.alertname }} - {{ .Status }}'
+    webhook_configs:
+      - url: 'http://bff-web.qts-dev.svc.cluster.local:8080/webhooks/alert'
+        send_resolved: true
+
+  # Critical alerts - PagerDuty integration
+  - name: 'qts-critical'
+    pagerduty_configs:
+      - service_key: 'CHANGE_ME_PAGERDUTY_KEY'
+        severity: critical
+        details:
+          alertname: '{{ .GroupLabels.alertname }}'
+          namespace: '{{ .GroupLabels.namespace }}'
+          description: '{{ .Annotations.description }}'
+        append_details:
+          - name: 'summary'
+            value: '{{ .Annotations.summary }}'
+    email_configs:
+      - to: 'qts-oncall@example.com'
+        send_resolved: true
+
+  # Trading desk - Slack/IM
+  - name: 'qts-trading-desk'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGE_ME'
+        channel: '#qts-trading'
+        title: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        severity: critical
+        send_resolved: true
+        footer: 'QTS AlertManager'
+        callback_id: '{{ .GroupLabels.alertname }}'
+    webhook_configs:
+      - url: 'http://bff-web.qts-dev.svc.cluster.local:8080/webhooks/trading-alert'
+        send_resolved: true
+
+  # Risk management
+  - name: 'qts-risk-management'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/CHANGE_ME'
+        channel: '#qts-risk'
+        title: 'Risk Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        send_resolved: true
+
+  # Market data team
+  - name: 'qts-market-data'
+    email_configs:
+      - to: 'qts-market@example.com'
+        send_resolved: true
+
+inhibit_rules:
+  # Suppress duplicate alerts for the same namespace
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['namespace', 'alertname']
+  
+  # Suppress lower severity if higher is active for same component
+  - source_match:
+      component: '.*'
+      severity: critical
+    target_match:
+      component: '.*'
+      severity: warning
+    equal: ['namespace', 'component']

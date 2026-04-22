@@ -1,0 +1,92 @@
+# BIZ-TRADE Service - Go Trading Core
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: biz-trade
+  namespace: qts-dev
+  labels:
+    app: qts
+    component: biz-trade
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: qts
+      component: biz-trade
+  template:
+    metadata:
+      labels:
+        app: qts
+        component: biz-trade
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: qts-sa
+      containers:
+        - name: biz-trade
+          image: qts/biz-trade:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9090
+              name: grpc
+          env:
+            - name: GIN_MODE
+              value: "debug"
+            - name: SERVER_PORT
+              value: "8080"
+            - name: DB_HOST
+              value: "postgres.qts-dev.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "qts_trade"
+            - name: REDIS_HOST
+              value: "redis.qts-dev.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: biz-trade
+  namespace: qts-dev
+  labels:
+    app: qts
+    component: biz-trade
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
+    - port: 9090
+      targetPort: 9090
+      protocol: TCP
+      name: grpc
+  selector:
+    app: qts
+    component: biz-trade

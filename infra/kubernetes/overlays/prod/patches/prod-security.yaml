@@ -1,0 +1,125 @@
+# Production Security Hardening
+# Pod Security Standards and Network Policies
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qts-prod
+  labels:
+    environment: production
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# NetworkPolicy for biz-trade (allow only from api-gateway)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: biz-trade-network-policy
+  namespace: qts-prod
+spec:
+  podSelector:
+    matchLabels:
+      component: biz-trade
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              environment: production
+          podSelector:
+            matchLabels:
+              component: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              environment: production
+          podSelector:
+            matchLabels:
+              component: biz-risk
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# NetworkPolicy for biz-risk
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: biz-risk-network-policy
+  namespace: qts-prod
+spec:
+  podSelector:
+    matchLabels:
+      component: biz-risk
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              environment: production
+          podSelector:
+            matchLabels:
+              component: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              environment: production
+          podSelector:
+            matchLabels:
+              component: biz-trade
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# NetworkPolicy for market-service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: market-service-network-policy
+  namespace: qts-prod
+spec:
+  podSelector:
+    matchLabels:
+      component: market-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              environment: production
+          podSelector:
+            matchLabels:
+              component: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector: {}
+          # Allow external market data sources
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443

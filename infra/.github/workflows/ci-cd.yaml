@@ -1,0 +1,354 @@
+name: QTS CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+
+jobs:
+  # ============================================
+  # Job 1: Lint & Unit Tests
+  # ============================================
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+      - name: Cache Node modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+
+      # Auth Service (Go)
+      - name: Lint auth-service
+        run: |
+          cd services/auth-service
+          go vet ./...
+          go fmt ./...
+
+      # Biz Trade (Go)
+      - name: Lint biz-trade
+        run: |
+          cd services/biz-trade
+          go vet ./...
+          go fmt ./...
+
+      # Order Service (Go)
+      - name: Lint order-service
+        run: |
+          cd services/order-service
+          go vet ./...
+          go fmt ./...
+
+      # API Gateway (Node.js)
+      - name: Lint api-gateway
+        run: |
+          cd services/api-gateway
+          npm ci
+          npm run lint
+
+      # BFF Web (Node.js)
+      - name: Lint bff-web
+        run: |
+          cd services/bff-web
+          npm ci
+          npm run lint
+
+      # Biz Risk (Java)
+      - name: Lint biz-risk
+        run: |
+          cd services/biz-risk
+          ./mvnw checkstyle:check
+
+      # Market Service (Java)
+      - name: Lint market-service
+        run: |
+          cd services/market-service
+          ./mvnw checkstyle:check
+
+  # ============================================
+  # Job 2: Build Services
+  # ============================================
+  build-services:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - biz-trade
+          - order-service
+          - api-gateway
+          - bff-web
+          - biz-risk
+          - market-service
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build Go services
+        if: contains(matrix.service, '-service') && !contains(matrix.service, 'biz-risk') && !contains(matrix.service, 'market')
+        run: |
+          cd services/${{ matrix.service }}
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ github.sha }} \
+            --tag ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest \
+            --push \
+            .
+
+      - name: Build Node.js services
+        if: contains(matrix.service, 'api-gateway') || contains(matrix.service, 'bff-web')
+        run: |
+          cd services/${{ matrix.service }}
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ github.sha }} \
+            --tag ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest \
+            --push \
+            .
+
+      - name: Build Java services
+        if: contains(matrix.service, 'biz-risk') || contains(matrix.service, 'market')
+        run: |
+          cd services/${{ matrix.service }}
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ github.sha }} \
+            --tag ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest \
+            --push \
+            .
+
+  # ============================================
+  # Job 3: Integration Tests
+  # ============================================
+  integration-test:
+    needs: build-services
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubectl for dev
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_DEV }}" | base64 -d > kubeconfig.yaml
+          echo "KUBECONFIG=$(pwd)/kubeconfig.yaml" >> $GITHUB_ENV
+
+      - name: Wait for services
+        run: |
+          kubectl wait --for=condition=available deployment/api-gateway -n qts-dev --timeout=300s
+          kubectl wait --for=condition=available deployment/biz-trade -n qts-dev --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          # Health check test
+          curl -f http://api-gateway.qts-dev.svc.cluster.local:8080/health || exit 1
+          curl -f http://biz-trade.qts-dev.svc.cluster.local:8080/health || exit 1
+
+  # ============================================
+  # Job 4: Deploy to Development
+  # ============================================
+  deploy-dev:
+    needs: integration-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: development
+      url: https://dev.qts.example.com
+    steps:
+      - name: Checkout infra
+        uses: actions/checkout@v4
+        with:
+          repository: qts/infra
+          path: infra
+
+      - name: Update image tags (dev)
+        run: |
+          cd infra
+          # Update image tags in kustomization
+          for svc in auth-service biz-trade order-service api-gateway bff-web biz-risk market-service; do
+            sed -i "s|qts/$svc:.*|$svc: latest|" overlays/dev/kustomization.yaml
+          done
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest images
+        run: |
+          for svc in auth-service biz-trade order-service api-gateway bff-web biz-risk market-service; do
+            docker pull ghcr.io/${{ github.repository }}/$svc:latest || true
+          done
+
+      - name: Deploy to dev cluster
+        run: |
+          kubectl apply -k infra/kubernetes/overlays/dev/
+          kubectl rollout status deployment -n qts-dev --timeout=600s
+
+  # ============================================
+  # Job 5: Deploy to Staging
+  # ============================================
+  deploy-staging:
+    needs: integration-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://staging.qts.example.com
+    steps:
+      - name: Checkout infra
+        uses: actions/checkout@v4
+        with:
+          repository: qts/infra
+          path: infra
+
+      - name: Update image tags (staging)
+        run: |
+          cd infra
+          SHA=${{ github.sha }}
+          for svc in auth-service biz-trade order-service api-gateway bff-web biz-risk market-service; do
+            sed -i "s|qts/$svc:.*|$svc:$SHA|" overlays/staging/kustomization.yaml
+          done
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull images
+        run: |
+          for svc in auth-service biz-trade order-service api-gateway bff-web biz-risk market-service; do
+            docker pull ghcr.io/${{ github.repository }}/$svc:${{ github.sha }}
+          done
+
+      - name: Deploy to staging cluster
+        run: |
+          kubectl apply -k infra/kubernetes/overlays/staging/
+          kubectl rollout status deployment -n qts-staging --timeout=600s
+
+      - name: Run staging tests
+        run: |
+          # Run regression tests against staging
+          curl -f https://staging.qts.example.com/health || exit 1
+
+  # ============================================
+  # Job 6: Deploy to Production
+  # ============================================
+  deploy-prod:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://qts.example.com
+    steps:
+      - name: Checkout infra
+        uses: actions/checkout@v4
+        with:
+          repository: qts/infra
+          path: infra
+
+      - name: Update image tags (prod)
+        run: |
+          cd infra
+          SHA=${{ github.sha }}
+          for svc in auth-service biz-trade order-service api-gateway bff-web biz-risk market-service; do
+            sed -i "s|qts/$svc:.*|$svc:$SHA|" overlays/prod/kustomization.yaml
+          done
+
+      - name: Create backup
+        run: |
+          kubectl get all -n qts-prod -o yaml > backup-$(date +%Y%m%d-%H%M%S).yaml
+
+      - name: Deploy to production cluster
+        run: |
+          kubectl apply -k infra/kubernetes/overlays/prod/
+          kubectl rollout status deployment -n qts-prod --timeout=900s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n qts-prod
+          kubectl get ingress -n qts-prod
+
+  # ============================================
+  # Job 7: Security Scan
+  # ============================================
+  security-scan:
+    needs: build-services
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'

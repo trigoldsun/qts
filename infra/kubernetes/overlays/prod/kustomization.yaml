@@ -1,0 +1,30 @@
+# QTS Kustomize Overlay for Production Environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: qts-prod
+
+bases:
+  - ../base
+
+commonLabels:
+  app: qts
+  environment: production
+
+patchesStrategicMerge:
+  - patches/prod-resources.yaml
+  - patches/prod-security.yaml
+
+images:
+  - name: qts/api-gateway
+    newTag: v1.0.0
+  - name: qts/bff-web
+    newTag: v1.0.0
+  - name: qts/biz-trade
+    newTag: v1.0.0
+  - name: qts/biz-risk
+    newTag: v1.0.0
+  - name: qts/market-service
+    newTag: v1.0.0
+  - name: qts/auth-service
+    newTag: v1.0.0

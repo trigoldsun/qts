@@ -1,0 +1,29 @@
+# QTS Kustomize Overlay for Staging Environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: qts-staging
+
+bases:
+  - ../base
+
+commonLabels:
+  app: qts
+  environment: staging
+
+patchesStrategicMerge:
+  - patches/staging-resources.yaml
+
+images:
+  - name: qts/api-gateway
+    newTag: staging-1.0.0
+  - name: qts/bff-web
+    newTag: staging-1.0.0
+  - name: qts/biz-trade
+    newTag: staging-1.0.0
+  - name: qts/biz-risk
+    newTag: staging-1.0.0
+  - name: qts/market-service
+    newTag: staging-1.0.0
+  - name: qts/auth-service
+    newTag: staging-1.0.0

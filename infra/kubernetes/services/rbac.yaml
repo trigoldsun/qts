@@ -1,0 +1,138 @@
+# QTS RBAC Configuration
+---
+# ServiceAccount for QTS applications
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qts-sa
+  namespace: qts-dev
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qts-sa
+  namespace: qts-staging
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qts-sa
+  namespace: qts-prod
+---
+# Role for namespace-scoped resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: qts-role
+  namespace: qts-dev
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: qts-role
+  namespace: qts-staging
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: qts-role
+  namespace: qts-prod
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+---
+# RoleBinding for Dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: qts-role-binding
+  namespace: qts-dev
+subjects:
+  - kind: ServiceAccount
+    name: qts-sa
+    namespace: qts-dev
+roleRef:
+  kind: Role
+  name: qts-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for Staging
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: qts-role-binding
+  namespace: qts-staging
+subjects:
+  - kind: ServiceAccount
+    name: qts-sa
+    namespace: qts-staging
+roleRef:
+  kind: Role
+  name: qts-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for Prod
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: qts-role-binding
+  namespace: qts-prod
+subjects:
+  - kind: ServiceAccount
+    name: qts-sa
+    namespace: qts-prod
+roleRef:
+  kind: Role
+  name: qts-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# ClusterRole for read-only cluster resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: qts-readonly-clusterrole
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces", "persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: qts-readonly-clusterbinding
+subjects:
+  - kind: ServiceAccount
+    name: qts-sa
+    namespace: qts-dev
+  - kind: ServiceAccount
+    name: qts-sa
+    namespace: qts-staging
+  - kind: ServiceAccount
+    name: qts-sa
+    namespace: qts-prod
+roleRef:
+  kind: ClusterRole
+  name: qts-readonly-clusterrole
+  apiGroup: rbac.authorization.k8s.io

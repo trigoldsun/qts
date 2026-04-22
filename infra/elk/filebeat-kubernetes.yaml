@@ -1,0 +1,404 @@
+# ELK Stack Log Collection Configuration
+# Supports both Kubernetes DaemonSet and standalone Filebeat
+
+---
+# ============================================
+# Part 1: Filebeat Configuration (Kubernetes)
+# ============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+  namespace: qts-monitoring
+data:
+  filebeat.yml: |
+    filebeat.inputs:
+      # Application logs - Go services
+      - type: container
+        paths:
+          - /var/log/containers/*auth-service*.log
+          - /var/log/containers/*biz-trade*.log
+          - /var/log/containers/*order-service*.log
+        processors:
+          - add_kubernetes_metadata:
+              host: ${NODE_NAME}
+              matchers:
+                - logs_path:
+                    logs_path: "/var/log/containers/"
+        fields:
+          service_type: go
+          environment: ${ENVIRONMENT:dev}
+        fields_under_root: true
+
+      # Java services logs
+      - type: container
+        paths:
+          - /var/log/containers/*biz-risk*.log
+          - /var/log/containers/*market-service*.log
+        processors:
+          - add_kubernetes_metadata:
+              host: ${NODE_NAME}
+              matchers:
+                - logs_path:
+                    logs_path: "/var/log/containers/"
+        fields:
+          service_type: java
+          environment: ${ENVIRONMENT:dev}
+        fields_under_root: true
+
+      # Node.js services logs
+      - type: container
+        paths:
+          - /var/log/containers/*api-gateway*.log
+          - /var/log/containers/*bff-web*.log
+        processors:
+          - add_kubernetes_metadata:
+              host: ${NODE_NAME}
+              matchers:
+                - logs_path:
+                    logs_path: "/var/log/containers/"
+        fields:
+          service_type: nodejs
+          environment: ${ENVIRONMENT:dev}
+        fields_under_root: true
+
+      # Audit logs (structured JSON)
+      - type: container
+        paths:
+          - /var/log/containers/*audit*.log
+        fields:
+          log_type: audit
+        fields_under_root: true
+
+    # Processors
+    processors:
+      - add_host_metadata:
+          when.not.contains.tags: forwarded
+      - add_cloud_metadata: ~
+      - add_docker_metadata: ~
+      - decode_json_fields:
+          fields: ["message"]
+          target: ""
+          overwrite_keys: true
+          add_error_key: true
+      - rename:
+          fields:
+            - from: "container.name"
+              to: "docker.container.name"
+            - from: "kubernetes.container.name"
+              to: "kubernetes.container.name"
+          ignore_missing: true
+          fail_on_error: false
+
+    # Output to Elasticsearch
+    output.elasticsearch:
+      hosts: ["${ELASTICSEARCH_HOSTS:elasticsearch.qts-monitoring.svc.cluster.local:9200}"]
+      username: "${ELASTICSEARCH_USERNAME:}"
+      password: "${ELASTICSEARCH_PASSWORD:}"
+      ssl.enabled: ${ELASTICSEARCH_SSL:false}
+      ssl.certificate_authorities: ["/etc/filebeat/certs/ca.crt"]
+      ssl.certificate: "/etc/filebeat/certs/client.crt"
+      ssl.key: "/etc/filebeat/certs/client.key"
+      index: "qts-logs-%{+yyyy.MM.dd}"
+      ilm.enabled: true
+      ilm.rollover_alias: "qts-logs"
+      ilm.pattern: "{now/d}-000001"
+      ilm.policy: "qts-logs-policy"
+
+    # Kibana connection for dashboard
+    setup.kibana:
+      host: "${KIBANA_HOST:kibana.qts-monitoring.svc.cluster.local:5601}"
+
+    # Index template
+    setup.template:
+      name: "qts-logs"
+      pattern: "qts-logs-*"
+      settings:
+        index.number_of_shards: 2
+        index.number_of_replicas: 1
+
+    # Logging
+    logging.level: info
+    logging.to_files: false
+
+---
+# Filebeat DaemonSet
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat
+  namespace: qts-monitoring
+  labels:
+    app: filebeat
+spec:
+  selector:
+    matchLabels:
+      app: filebeat
+  template:
+    metadata:
+      labels:
+        app: filebeat
+    spec:
+      serviceAccountName: filebeat
+      terminationGracePeriodSeconds: 30
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: filebeat
+          image: docker.elastic.co/beats/filebeat:8.11.0
+          args: [
+            "-c", "/etc/filebeat.yml",
+            "-e"
+          ]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: ENVIRONMENT
+              value: "${ENVIRONMENT:dev}"
+            - name: ELASTICSEARCH_HOSTS
+              value: "${ELASTICSEARCH_HOSTS}"
+            - name: ELASTICSEARCH_USERNAME
+              value: "${ELASTICSEARCH_USERNAME}"
+            - name: ELASTICSEARCH_PASSWORD
+              value: "${ELASTICSEARCH_PASSWORD}"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/filebeat.yml
+              subPath: filebeat.yml
+              readOnly: true
+            - name: data
+              mountPath: /usr/share/filebeat/data
+            - name: certs
+              mountPath: /etc/filebeat/certs
+              readOnly: true
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: filebeat-config
+        - name: data
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: elastic-certs
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+
+---
+# Filebeat RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: filebeat
+  namespace: qts-monitoring
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: filebeat
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - pods
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: filebeat
+subjects:
+  - kind: ServiceAccount
+    name: filebeat
+    namespace: qts-monitoring
+roleRef:
+  kind: ClusterRole
+  name: filebeat
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ============================================
+# Part 2: Elasticsearch Index Lifecycle Policy
+# ============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: es-index-lifecycle-config
+  namespace: qts-monitoring
+data:
+  index-lifecycle-policy.json: |
+    {
+      "policy": {
+        "phases": {
+          "hot": {
+            "min_age": "0ms",
+            "actions": {
+              "rollover": {
+                "max_size": "50gb",
+                "max_age": "1d"
+              },
+              "set_priority": 100
+            }
+          },
+          "warm": {
+            "min_age": "3d",
+            "actions": {
+              "shrink": {
+                "number_of_shards": 1
+              },
+              "forcemerge": {
+                "max_num_segments": 1
+              },
+              "set_priority": 50
+            }
+          },
+          "cold": {
+            "min_age": "7d",
+            "actions": {
+              "set_priority": 0,
+              "freeze": {}
+            }
+          },
+          "delete": {
+            "min_age": "30d",
+            "actions": {
+              "delete": {}
+            }
+          }
+        }
+      }
+    }
+
+---
+# ============================================
+# Part 3: Kibana Index Pattern ConfigMap
+# ============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-index-pattern
+  namespace: qts-monitoring
+data:
+  index-pattern.json: |
+    {
+      "title": "qts-logs-*",
+      "timeFieldName": "@timestamp",
+      "fields": "[\"service_type\", \"environment\", \"log_type\", \"kubernetes.*\", \"docker.*\"]"
+    }
+
+---
+# ============================================
+# Part 4: Logstash Pipeline (if needed)
+# ============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  namespace: qts-monitoring
+data:
+  logstash.conf: |
+    input {
+      beats {
+        port => 5044
+        ssl => true
+        ssl_certificate => "/etc/logstash/certs/logstash.crt"
+        ssl_key => "/etc/logstash/certs/logstash.key"
+      }
+    }
+
+    filter {
+      if [service_type] == "go" {
+        json {
+          source => "message"
+          target => "parsed"
+        }
+        mutate {
+          add_field => {
+            "service_name" => "%{[kubernetes][container][name]}"
+            "service_version" => "%{[parsed][version]}"
+          }
+        }
+      }
+
+      if [service_type] == "java" {
+        grok {
+          match => { "message" => "(?<timestamp>%{TIMESTAMP_ISO8601}) \[%{LOGLEVEL:level}\] %{DATA:logger} - %{DATA:message}" }
+        }
+        date {
+          match => [ "timestamp", "ISO8601" ]
+          target => "@timestamp"
+        }
+      }
+
+      mutate {
+        add_field => {
+          "environment" => "${ENVIRONMENT:unknown}"
+          "cluster" => "${CLUSTER_NAME:qts}"
+        }
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["${ELASTICSEARCH_HOSTS}"]
+        user => "${ELASTICSEARCH_USERNAME}"
+        password => "${ELASTICSEARCH_PASSWORD}"
+        index => "qts-logs-%{+YYYY.MM.dd}"
+      }
+    }
+
+---
+# ============================================
+# Part 5: Elasticsearch Cluster (optional)
+# For production, consider managed service
+# ============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  namespace: qts-monitoring
+data:
+  elasticsearch.yml: |
+    cluster.name: qts-elasticsearch
+    node.name: ${NODE_NAME}
+    
+    # Memory settings
+    bootstrap.memory_lock: true
+    ES_JAVA_OPTS: "-Xms2g -Xmx2g"
+    
+    # Network
+    network.host: 0.0.0.0
+    http.port: 9200
+    
+    # Discovery
+    discovery.type: single-node
+    
+    # Security
+    xpack.security.enabled: ${ELASTICSEARCH_SSL:false}
+    xpack.security.http.ssl.enabled: ${ELASTICSEARCH_SSL:false}
+    
+    # Monitoring
+    xpack.monitoring.collection.enabled: true
+    
+    # ILM
+    indices.lifecycle.poll_interval: 1m

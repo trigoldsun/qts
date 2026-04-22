@@ -1,0 +1,133 @@
+# QTS ServiceMonitor Configurations for Prometheus Operator
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api-gateway-monitor
+  namespace: qts-dev
+  labels:
+    app: qts
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qts
+      component: api-gateway
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - qts-dev
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: bff-web-monitor
+  namespace: qts-dev
+  labels:
+    app: qts
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qts
+      component: bff-web
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - qts-dev
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: biz-trade-monitor
+  namespace: qts-dev
+  labels:
+    app: qts
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qts
+      component: biz-trade
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 10s
+      scrapeTimeout: 5s
+  namespaceSelector:
+    matchNames:
+      - qts-dev
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: biz-risk-monitor
+  namespace: qts-dev
+  labels:
+    app: qts
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qts
+      component: biz-risk
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 10s
+      scrapeTimeout: 5s
+  namespaceSelector:
+    matchNames:
+      - qts-dev
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: market-service-monitor
+  namespace: qts-dev
+  labels:
+    app: qts
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qts
+      component: market-service
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - qts-dev
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: auth-service-monitor
+  namespace: qts-dev
+  labels:
+    app: qts
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qts
+      component: auth-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - qts-dev

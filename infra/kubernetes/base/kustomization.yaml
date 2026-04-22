@@ -1,0 +1,21 @@
+# QTS Kubernetes Base Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - services/rbac.yaml
+  - services/configmaps.yaml
+  - services/secrets.yaml
+  - services/api-gateway.yaml
+  - services/bff-web.yaml
+  - services/biz-trade.yaml
+  - services/biz-risk.yaml
+  - services/market-service.yaml
+  - services/auth-service.yaml
+  - services/hpa.yaml
+  - services/ingress.yaml
+
+commonLabels:
+  app: qts
+  managed-by: kustomize

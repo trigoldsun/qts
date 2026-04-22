@@ -1,0 +1,35 @@
+# QTS Namespaces - Dev/Staging/Prod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qts-dev
+  labels:
+    environment: development
+    team: qts-platform
+    component: none
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qts-staging
+  labels:
+    environment: staging
+    team: qts-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qts-prod
+  labels:
+    environment: production
+    team: qts-platform
+---
+# Monitoring namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qts-monitoring
+  labels:
+    environment: monitoring
+    team: qts-platform

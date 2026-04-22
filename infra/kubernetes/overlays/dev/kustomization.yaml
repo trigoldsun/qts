@@ -1,0 +1,40 @@
+# QTS Kustomize Overlay for Dev Environment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: qts-dev
+
+bases:
+  - services/namespace
+  - services/rbac
+  - services/configmaps
+  - services/secrets
+  - services/api-gateway
+  - services/bff-web
+  - services/biz-trade
+  - services/biz-risk
+  - services/market-service
+  - services/auth-service
+  - services/hpa
+  - services/ingress
+
+commonLabels:
+  app: qts
+  environment: dev
+
+patchesStrategicMerge:
+  - patches/dev-replicas.yaml
+
+images:
+  - name: qts/api-gateway
+    newTag: latest
+  - name: qts/bff-web
+    newTag: latest
+  - name: qts/biz-trade
+    newTag: latest
+  - name: qts/biz-risk
+    newTag: latest
+  - name: qts/market-service
+    newTag: latest
+  - name: qts/auth-service
+    newTag: latest

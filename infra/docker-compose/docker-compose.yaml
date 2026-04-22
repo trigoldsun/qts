@@ -1,0 +1,226 @@
+# QTS Development Docker Compose
+# Resource-constrained environment (1.3GB RAM) - Grouped start/stop strategy
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure Layer
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:14-alpine
+    container_name: qts-postgres
+    environment:
+      POSTGRES_DB: qts_trade
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: dev_password_change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devuser -d qts_trade"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: qts-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Core Group (Start first - ~400MB)
+  # ---------------------------------------------------------------------------
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: qts-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      BIZ_TRADE_URL: http://biz-trade:8080
+      BIZ_RISK_URL: http://biz-risk:8080
+      BIZ_MARKET_URL: http://market-service:8080
+      AUTH_SERVICE_URL: http://auth-service:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: qts-auth-service
+    ports:
+      - "8081:8080"
+    environment:
+      GIN_MODE: debug
+      SERVER_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: qts_auth
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  bff-web:
+    build:
+      context: ./services/bff-web
+      dockerfile: Dockerfile
+    container_name: qts-bff-web
+    ports:
+      - "8082:8080"
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      API_GATEWAY_URL: http://api-gateway:8080
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Trading Group (~600MB)
+  # ---------------------------------------------------------------------------
+  biz-trade:
+    build:
+      context: ./services/biz-trade
+      dockerfile: Dockerfile
+    container_name: qts-biz-trade
+    ports:
+      - "8083:8080"
+      - "9093:9090"
+    environment:
+      GIN_MODE: debug
+      SERVER_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: qts_trade
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  biz-risk:
+    build:
+      context: ./services/biz-risk
+      dockerfile: Dockerfile
+    container_name: qts-biz-risk
+    ports:
+      - "8084:8080"
+      - "9094:9091"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SERVER_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: qts_risk
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      BIZ_TRADE_URL: http://biz-trade:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      biz-trade:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health/liveness || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: qts-order-service
+    ports:
+      - "8085:8080"
+    environment:
+      GIN_MODE: debug
+      SERVER_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: qts_trade
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      biz-trade:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Market Group (~600MB)
+  # ---------------------------------------------------------------------------
+  market-service:
+    build:
+      context: ./services/market-service
+      dockerfile: Dockerfile
+    container_name: qts-market-service
+    ports:
+      - "8086:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SERVER_PORT: 8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health/liveness || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: qts-network
