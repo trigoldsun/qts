@@ -1,0 +1,155 @@
+# =============================================================================
+# Base / Common
+# =============================================================================
+*.log
+*.tmp
+*.bak
+*.swp
+*~.*
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+*.env.local
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+build/
+out/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test outputs
+覆盖率/
+coverage/
+.nyc_output/
+*.lcov
+
+# =============================================================================
+# Java / Spring Boot
+# =============================================================================
+# Compiled class files
+*.class
+
+# Package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Spring Boot
+*.pid
+
+# =============================================================================
+# Go / Gin
+# =============================================================================
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+
+# Go vendor
+vendor/
+Godeps/
+
+# Go workspace
+go.work
+
+# Air (live reload)
+.air/
+tmp/
+
+# =============================================================================
+# Node.js / NestJS / NPM
+# =============================================================================
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+.next/
+.nuxt/
+output/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Production
+build/
+
+# Misc
+.npm
+.yarn-integrity
+lerna-debug.log*
+.npm-debug.log*
+.yarn-debug.log*
+.yarn-error.log*
+
+# =============================================================================
+# Python (if used)
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# =============================================================================
+# Kubernetes / Terraform
+# =============================================================================
+kubeconfig*
+*.kubeconfig
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+*.tfplan
+.k8s-local/
+
+# Helm
+charts/
+
+# =============================================================================
+# CI/CD
+# =============================================================================
+.github/workflows/*.local
+*.local.yml
