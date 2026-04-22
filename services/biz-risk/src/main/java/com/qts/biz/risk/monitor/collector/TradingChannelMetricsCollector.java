@@ -185,8 +185,16 @@ public class TradingChannelMetricsCollector {
     
     private double getPercentileValue(Timer timer, double quantile) {
         // Micrometer stores percentiles in the timer snapshot
-        // For simplicity, we return a calculated approximation
-        return timer.takeSnapshot().percentile(quantile);
+        // Access via percentileValues() array
+        io.micrometer.core.instrument.distribution.HistogramSnapshot snapshot = timer.takeSnapshot();
+        io.micrometer.core.instrument.distribution.ValueAtPercentile[] percentileValues = snapshot.percentileValues();
+        for (io.micrometer.core.instrument.distribution.ValueAtPercentile vap : percentileValues) {
+            if (Math.abs(vap.percentile() - quantile) < 0.001) {
+                return vap.value();
+            }
+        }
+        // Fallback to 0 if not found
+        return 0.0;
     }
     
     private String determineStatus(double p99Latency) {

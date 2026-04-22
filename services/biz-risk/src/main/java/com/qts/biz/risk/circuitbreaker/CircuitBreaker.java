@@ -1,4 +1,4 @@
-package com.qts.biz.trade.circuitbreaker;
+package com.qts.biz.risk.circuitbreaker;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -25,11 +25,14 @@ public class CircuitBreaker {
     private final String name;
     private final CircuitBreakerConfig config;
     
-    @Getter
     private volatile CircuitBreakerState state = CircuitBreakerState.CLOSED;
     
     private final AtomicReference<CircuitBreakerState> currentState = 
         new AtomicReference<>(CircuitBreakerState.CLOSED);
+    
+    public CircuitBreakerState getState() {
+        return currentState.get();
+    }
     
     private volatile long lastStateChangeTime;
     private volatile long openedAt;
@@ -132,7 +135,7 @@ public class CircuitBreaker {
     public void recordSlowCall(long durationMs) {
         slowCalls.increment();
         
-        if (durationMs > config.getSlowCallDuration() * 1000) {
+        if (durationMs > config.getSlowCallDurationMs()) {
             recordInBucket(true, durationMs, true);
         }
         
@@ -191,7 +194,7 @@ public class CircuitBreaker {
         return openDuration >= config.getCircuitOpenDuration() * 1000;
     }
     
-    private void transitionToOpen() {
+    void transitionToOpen() {
         CircuitBreakerState previousState = currentState.getAndSet(CircuitBreakerState.OPEN);
         if (previousState != CircuitBreakerState.OPEN) {
             openedAt = System.currentTimeMillis();
@@ -201,7 +204,7 @@ public class CircuitBreaker {
         }
     }
     
-    private void transitionToHalfOpen() {
+    void transitionToHalfOpen() {
         CircuitBreakerState previousState = currentState.getAndSet(CircuitBreakerState.HALF_OPEN);
         if (previousState != CircuitBreakerState.HALF_OPEN) {
             lastStateChangeTime = System.currentTimeMillis();
@@ -212,7 +215,7 @@ public class CircuitBreaker {
         }
     }
     
-    private void transitionToClosed() {
+    void transitionToClosed() {
         CircuitBreakerState previousState = currentState.getAndSet(CircuitBreakerState.CLOSED);
         if (previousState != CircuitBreakerState.CLOSED) {
             lastStateChangeTime = System.currentTimeMillis();
@@ -269,7 +272,7 @@ public class CircuitBreaker {
         long currentP99 = p99DurationNs.get();
         long newP99 = durationMs * 1_000_000;
         p99DurationNs.updateAndGet(current -> 
-            current == 0 ? newP99 : (current * 0.9 + newP99 * 0.1));
+            current == 0 ? newP99 : (long)(current * 0.9 + newP99 * 0.1));
     }
     
     private void resetMetrics() {

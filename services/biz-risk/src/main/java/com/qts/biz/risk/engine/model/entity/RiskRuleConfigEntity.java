@@ -4,7 +4,7 @@ import com.qts.biz.risk.engine.model.enums.LogicOperator;
 import com.qts.biz.risk.engine.model.enums.RuleStatus;
 import com.qts.biz.risk.engine.model.enums.RuleType;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**

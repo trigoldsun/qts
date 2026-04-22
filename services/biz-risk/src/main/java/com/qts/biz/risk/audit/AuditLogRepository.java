@@ -67,8 +67,5 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             @Param("endTime") Instant endTime,
             Pageable pageable);
 
-    /**
-     * Batch save for Kafka consumer
-     */
-    List<AuditLog> saveAll(Iterable<AuditLog> entities);
+    // Note: saveAll is inherited from JpaRepository - no need to redeclare
 }

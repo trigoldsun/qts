@@ -115,7 +115,10 @@ public class DefaultRuleEngine implements RuleEngine {
                                        List<RiskCheckResponse.RuleCheckResult> allResults) {
         
         boolean shortCircuit = false;
-        boolean result = true;
+
+        // For OR logic, initialize result to false - all rules must fail if none pass
+        // For AND logic, initialize result to true - all rules must pass
+        boolean result = (defaultChainOperator == LogicOperator.AND);
 
         for (RiskRule rule : sortedRules) {
             try {
@@ -139,10 +142,13 @@ public class DefaultRuleEngine implements RuleEngine {
                         break;
                     }
                 } else {
-                    // OR: if any passes, we can short circuit at the end
+                    // OR: if any passes, we're done - short circuit with success
                     if (ruleResult.isPassed()) {
+                        logger.debug("Rule {} passed (OR chain), short-circuiting", rule.getRuleId());
                         result = true;
+                        break;
                     }
+                    // If this rule failed, continue checking others (result stays false)
                 }
             } catch (Exception e) {
                 logger.error("Error evaluating rule {}: {}", rule.getRuleId(), e.getMessage());
@@ -156,6 +162,7 @@ public class DefaultRuleEngine implements RuleEngine {
                     result = false;
                     break;
                 }
+                // For OR logic, error also means fail - continue processing other rules but result stays false
             }
         }
 
@@ -230,14 +237,28 @@ public class DefaultRuleEngine implements RuleEngine {
 
         String ruleType = config.getRuleType().name();
         Map<String, Object> params = config.getParameters();
+        int priority = config.getPriority() != null ? config.getPriority() : 50;
 
         RiskRule rule;
         switch (ruleType) {
             case "POSITION_LIMIT":
                 rule = new PositionLimitRule(params);
+                if (priority != 50) {
+                    // Use the priority from config if different from default
+                    rule = new PositionLimitRule(
+                        getDoubleParam(params, "maxPositionPercent", 20.0), 
+                        priority
+                    );
+                }
                 break;
             case "SINGLE_ORDER_LIMIT":
                 rule = new SingleOrderLimitRule(params);
+                if (priority != 50) {
+                    rule = new SingleOrderLimitRule(
+                        getDoubleParam(params, "maxOrderAmount", 1000000.0), 
+                        priority
+                    );
+                }
                 break;
             case "DAILY_LOSS_LIMIT":
                 rule = new DailyLossLimitRule(params);
@@ -268,5 +289,33 @@ public class DefaultRuleEngine implements RuleEngine {
     @Override
     public List<RuleConfigDTO> getAllRules() {
         return ruleConfigService.getAllActiveRules();
+    }
+
+    private double getDoubleParam(Map<String, Object> params, String key, double defaultValue) {
+        if (params == null) return defaultValue;
+        Object value = params.get(key);
+        if (value == null) return defaultValue;
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private int getIntParam(Map<String, Object> params, String key, int defaultValue) {
+        if (params == null) return defaultValue;
+        Object value = params.get(key);
+        if (value == null) return defaultValue;
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 }

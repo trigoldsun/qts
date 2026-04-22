@@ -220,7 +220,7 @@ public class MonitorService {
 
     private RiskMonitoringMetrics buildMetrics() {
         // Build composite metrics for global push
-        RiskMonitoringMetrics.RiskMonitoringMetricsBuilder builder = RiskMonitoringMetrics.builder();
+        RiskMonitoringMetrics.Builder builder = RiskMonitoringMetrics.builder();
         
         // Add trading channel metrics
         TradingChannelMetricsDTO tradingMetrics = TradingChannelMetricsDTO.builder()

@@ -24,21 +24,27 @@ public class SingleOrderLimitRule implements RiskRule {
     private static final String RULE_ID = "SINGLE_ORDER_LIMIT";
     private static final String RULE_NAME = "Single Order Amount Limit";
     private static final String RULE_TYPE = "SINGLE_ORDER_LIMIT";
-    private static final int PRIORITY = 20;
     private static final double DEFAULT_MAX_ORDER_AMOUNT = 1000000.0; // 100万
     private static final String REJECT_CODE = "SINGLE_ORDER_AMOUNT_EXCEEDED";
 
     private final double maxOrderAmount;
     private final boolean enabled;
+    private final int priority;
 
     public SingleOrderLimitRule(double maxOrderAmount) {
+        this(maxOrderAmount, 20);
+    }
+
+    public SingleOrderLimitRule(double maxOrderAmount, int priority) {
         this.maxOrderAmount = maxOrderAmount;
         this.enabled = true;
+        this.priority = priority;
     }
 
     public SingleOrderLimitRule(Map<String, Object> parameters) {
         this.maxOrderAmount = getDoubleParam(parameters, "maxOrderAmount", DEFAULT_MAX_ORDER_AMOUNT);
         this.enabled = getBooleanParam(parameters, "enabled", true);
+        this.priority = getIntParam(parameters, "priority", 20);
     }
 
     @Override
@@ -58,7 +64,7 @@ public class SingleOrderLimitRule implements RiskRule {
 
     @Override
     public int getPriority() {
-        return PRIORITY;
+        return priority;
     }
 
     @Override
@@ -100,6 +106,20 @@ public class SingleOrderLimitRule implements RiskRule {
         }
         try {
             return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private int getIntParam(Map<String, Object> params, String key, int defaultValue) {
+        if (params == null) return defaultValue;
+        Object value = params.get(key);
+        if (value == null) return defaultValue;
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString());
         } catch (NumberFormatException e) {
             return defaultValue;
         }

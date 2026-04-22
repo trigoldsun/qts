@@ -96,7 +96,7 @@ public class RuleEvaluationService {
             }
             
             if (error[0] != null) {
-                throw error[0];
+                throw new RuntimeException("Risk evaluation failed", error[0]);
             }
             
             return response[0];
