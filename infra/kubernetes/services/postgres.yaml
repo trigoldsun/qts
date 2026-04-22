@@ -1,0 +1,305 @@
+# PostgreSQL StatefulSet for QTS Trading System
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: qts-dev
+  labels:
+    app: qts
+    component: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qts
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app: qts
+        component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: "devuser"
+            - name: POSTGRES_PASSWORD
+              value: "dev_password_change_me"
+            - name: POSTGRES_DB
+              value: "qts_trade"
+          args:
+            - -c
+            - max_connections=200
+            - -c
+            - shared_buffers=256MB
+            - -c
+            - effective_cache_size=512MB
+            - -c
+            - maintenance_work_mem=64MB
+            - -c
+            - checkpoint_completion_target=0.9
+            - -c
+            - wal_buffers=16MB
+            - -c
+            - default_statistics_target=100
+            - -c
+            - random_page_cost=1.1
+            - -c
+            - work_mem=4MB
+            - -c
+            - min_wal_size=1GB
+            - -c
+            - max_wal_size=4GB
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "devuser", "-d", "qts_trade"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "devuser", "-d", "qts_trade"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: postgres-init-scripts
+          configMap:
+            name: postgres-init-scripts
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: qts-dev
+  labels:
+    app: qts
+    component: postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: postgres
+  selector:
+    app: qts
+    component: postgres
+---
+# PostgreSQL Init Scripts ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: qts-dev
+data:
+  01-create-databases.sql: |
+    -- QTS PostgreSQL Schema - Part 1: Create Databases
+    -- Enable required extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+
+    -- Create databases
+    CREATE DATABASE qts_trade;
+    CREATE DATABASE qts_auth;
+    CREATE DATABASE qts_risk;
+
+  02-create-tables.sql: |
+    -- QTS Schema - qts_trade (Trading Core)
+    \c qts_trade;
+
+    CREATE TABLE IF NOT EXISTS orders (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        order_id VARCHAR(64) UNIQUE NOT NULL,
+        symbol VARCHAR(16) NOT NULL,
+        side VARCHAR(4) NOT NULL CHECK (side IN ('BUY', 'SELL')),
+        order_type VARCHAR(16) NOT NULL CHECK (order_type IN ('MARKET', 'LIMIT', 'STOP')),
+        price DECIMAL(18, 6),
+        quantity DECIMAL(18, 6) NOT NULL,
+        filled_quantity DECIMAL(18, 6) DEFAULT 0,
+        status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+        user_id VARCHAR(64) NOT NULL,
+        account_id VARCHAR(32),
+        order_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        update_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_symbol ON orders(symbol);
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+    CREATE INDEX IF NOT EXISTS idx_orders_order_time ON orders(order_time DESC);
+
+    CREATE TABLE IF NOT EXISTS order_events (
+        id BIGSERIAL PRIMARY KEY,
+        order_id VARCHAR(64) NOT NULL,
+        event_type VARCHAR(32) NOT NULL,
+        event_data JSONB,
+        event_time TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_order_events_order_id ON order_events(order_id);
+    CREATE INDEX IF NOT EXISTS idx_order_events_event_time ON order_events(event_time DESC);
+
+    CREATE TABLE IF NOT EXISTS trades (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        trade_id VARCHAR(64) UNIQUE NOT NULL,
+        order_id VARCHAR(64) NOT NULL,
+        counter_order_id VARCHAR(64),
+        symbol VARCHAR(16) NOT NULL,
+        side VARCHAR(4) NOT NULL,
+        price DECIMAL(18, 6) NOT NULL,
+        quantity DECIMAL(18, 6) NOT NULL,
+        trade_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
+    CREATE INDEX IF NOT EXISTS idx_trades_trade_time ON trades(trade_time DESC);
+
+    CREATE TABLE IF NOT EXISTS positions (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        account_id VARCHAR(32) NOT NULL,
+        symbol VARCHAR(16) NOT NULL,
+        quantity DECIMAL(18, 6) DEFAULT 0,
+        avg_price DECIMAL(18, 6) DEFAULT 0,
+        unrealized_pnl DECIMAL(18, 6) DEFAULT 0,
+        realized_pnl DECIMAL(18, 6) DEFAULT 0,
+        update_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(account_id, symbol)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_positions_account ON positions(account_id);
+
+  03-create-auth-tables.sql: |
+    -- QTS Schema - qts_auth (Authentication)
+    \c qts_auth;
+
+    CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id VARCHAR(64) UNIQUE NOT NULL,
+        username VARCHAR(128) UNIQUE NOT NULL,
+        email VARCHAR(256) UNIQUE NOT NULL,
+        password_hash VARCHAR(256) NOT NULL,
+        status VARCHAR(16) DEFAULT 'ACTIVE',
+        user_type VARCHAR(32),
+        last_login TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+    CREATE TABLE IF NOT EXISTS sessions (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        session_id VARCHAR(128) UNIQUE NOT NULL,
+        user_id VARCHAR(64) NOT NULL,
+        ip_address VARCHAR(64),
+        user_agent TEXT,
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+    CREATE TABLE IF NOT EXISTS api_keys (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        key_id VARCHAR(64) UNIQUE NOT NULL,
+        user_id VARCHAR(64) NOT NULL,
+        key_hash VARCHAR(256) NOT NULL,
+        description TEXT,
+        permissions JSONB,
+        rate_limit INTEGER DEFAULT 1000,
+        expires_at TIMESTAMP WITH TIME ZONE,
+        last_used_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
+
+  04-create-risk-tables.sql: |
+    -- QTS Schema - qts_risk (Risk Control)
+    \c qts_risk;
+
+    CREATE TABLE IF NOT EXISTS risk_rules (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        rule_id VARCHAR(64) UNIQUE NOT NULL,
+        rule_name VARCHAR(128) NOT NULL,
+        rule_type VARCHAR(32) NOT NULL,
+        condition JSONB NOT NULL,
+        action VARCHAR(32) NOT NULL,
+        priority INTEGER DEFAULT 0,
+        enabled BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_risk_rules_type ON risk_rules(rule_type);
+    CREATE INDEX IF NOT EXISTS idx_risk_rules_enabled ON risk_rules(enabled);
+
+    CREATE TABLE IF NOT EXISTS risk_audit_logs (
+        id BIGSERIAL PRIMARY KEY,
+        user_id VARCHAR(64) NOT NULL,
+        order_id VARCHAR(64),
+        rule_id VARCHAR(64),
+        action_taken VARCHAR(32),
+        risk_score DECIMAL(6, 2),
+        details JSONB,
+        decision VARCHAR(16),
+        decision_time TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_risk_audit_user ON risk_audit_logs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_risk_audit_order ON risk_audit_logs(order_id);
+    CREATE INDEX IF NOT EXISTS idx_risk_audit_time ON risk_audit_logs(decision_time DESC);
+
+    CREATE TABLE IF NOT EXISTS position_limits (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        account_id VARCHAR(32) NOT NULL,
+        symbol VARCHAR(16),
+        max_position DECIMAL(18, 6),
+        max_order_size DECIMAL(18, 6),
+        daily_trade_limit DECIMAL(18, 6),
+        update_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(account_id, symbol)
+    );
+
+    -- Default risk rules
+    INSERT INTO risk_rules (rule_id, rule_name, rule_type, condition, action, priority, enabled)
+    VALUES 
+        ('RULE_001', 'Max Order Size', 'ORDER_SIZE', '{"max_quantity": 1000000}', 'REJECT', 100, true),
+        ('RULE_002', 'Max Position', 'POSITION', '{"max_position": 5000000}', 'REJECT', 90, true),
+        ('RULE_003', 'Price Deviation', 'PRICE', '{"max_deviation_percent": 5}', 'ALERT', 80, true),
+        ('RULE_004', 'Trading Hours', 'TIME', '{"start_hour": 9, "end_hour": 15}', 'REJECT', 95, true)
+    ON CONFLICT (rule_id) DO NOTHING;
+
+  05-default-data.sql: |
+    -- QTS Default Data (Optional additional seeding)
+    \c qts_trade;
+    -- Add any additional default reference data here if needed

@@ -252,6 +252,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { io, Socket } from 'socket.io-client';
+import { marketApi, tradeApi } from '../utils/api';
 
 // Types
 interface Asset {
@@ -381,6 +382,8 @@ const getMarketPrice = (symbol: string): string => {
 const selectSymbol = (symbol: string) => {
   selectedSymbol.value = symbol;
   orderForm.symbol = symbol;
+  // Fetch quote for newly selected symbol
+  fetchQuote(symbol);
 };
 
 const setQuantity = (ratio: number) => {
@@ -441,10 +444,9 @@ const confirmClosePosition = async () => {
 // API calls
 const fetchAssets = async () => {
   try {
-    const response = await fetch(`/v1/accounts/${accountId}/assets`);
-    const result = await response.json();
-    if (result.success) {
-      assets.value = result.data;
+    const response = await tradeApi.getAssets(accountId);
+    if (response.success) {
+      assets.value = response.data;
     }
   } catch (error) {
     console.error('Failed to fetch assets:', error);
@@ -453,10 +455,9 @@ const fetchAssets = async () => {
 
 const fetchPositions = async () => {
   try {
-    const response = await fetch(`/v1/accounts/${accountId}/positions`);
-    const result = await response.json();
-    if (result.success) {
-      positions.value = result.data;
+    const response = await tradeApi.getPositions(accountId);
+    if (response.success) {
+      positions.value = response.data;
     }
   } catch (error) {
     console.error('Failed to fetch positions:', error);
@@ -465,13 +466,32 @@ const fetchPositions = async () => {
 
 const fetchOrders = async () => {
   try {
-    const response = await fetch(`/v1/accounts/${accountId}/orders`);
-    const result = await response.json();
-    if (result.success) {
-      orders.value = result.data;
+    const response = await tradeApi.getOrders(accountId);
+    if (response.success) {
+      orders.value = response.data;
     }
   } catch (error) {
     console.error('Failed to fetch orders:', error);
+  }
+};
+
+const fetchQuote = async (symbol: string) => {
+  try {
+    const response = await marketApi.getQuote(symbol);
+    if (response.code === 0) {
+      const data = response.data;
+      quotes.value.set(symbol, {
+        symbol: data.symbol,
+        price: data.lastPrice,
+        change: data.change || 0,
+        high: data.highPrice,
+        low: data.lowPrice,
+        volume: data.volume,
+        timestamp: new Date(),
+      });
+    }
+  } catch (error) {
+    console.error(`Failed to fetch quote for ${symbol}:`, error);
   }
 };
 
@@ -482,19 +502,23 @@ const submitOrderToApi = async (orderData: {
   price: number;
   quantity: number;
 }) => {
-  const response = await fetch('/v1/orders', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      accountId,
-      ...orderData,
-    }),
+  const response = await tradeApi.placeOrder({
+    accountId,
+    ...orderData,
   });
-  const result = await response.json();
-  if (!result.success) {
-    throw new Error(result.message || '下单失败');
+  if (!response.success) {
+    throw new Error(response.message || '下单失败');
   }
-  return result.data;
+  return response.data;
+};
+
+const cancelOrder = async (orderId: string) => {
+  try {
+    await tradeApi.cancelOrder(orderId);
+    await fetchOrders();
+  } catch (error) {
+    console.error('Failed to cancel order:', error);
+  }
 };
 
 const submitOrder = async () => {
@@ -536,18 +560,11 @@ const submitOrder = async () => {
   }
 };
 
-const cancelOrder = async (orderId: string) => {
-  try {
-    await fetch(`/v1/orders/${orderId}`, { method: 'DELETE' });
-    await fetchOrders();
-  } catch (error) {
-    console.error('Failed to cancel order:', error);
-  }
-};
-
 // WebSocket
 const connectWebSocket = () => {
-  socket = io('/', {
+  // Connect to BIZ-MARKET WebSocket
+  const wsUrl = import.meta.env.VITE_WS_URL || window.location.origin;
+  socket = io(wsUrl, {
     path: '/v1/market/stream',
     transports: ['websocket'],
     reconnection: true,
@@ -557,25 +574,30 @@ const connectWebSocket = () => {
   socket.on('connect', () => {
     wsConnected.value = true;
     console.log('Trading WebSocket connected');
-    
-    // Subscribe to quotes
+
+    // Subscribe to quotes for monitored symbols
     monitoredSymbols.forEach(sym => {
-      socket?.emit('subscribe_quote', { symbol: sym });
+      socket?.emit('subscribe', { symbol: sym, type: 'quote' });
     });
-    
+
     // Subscribe to account updates
     socket?.emit('subscribe_trades', { accountId });
   });
 
-  socket.on('quote', (data: { symbol: string; price: number; change: number; high: number; low: number; volume: number }) => {
+  socket.on('quote', (data: { symbol: string; lastPrice: number; change: number; high: number; low: number; volume: number }) => {
     quotes.value.set(data.symbol, {
-      ...data,
+      symbol: data.symbol,
+      price: data.lastPrice,
+      change: data.change,
+      high: data.high,
+      low: data.low,
+      volume: data.volume,
       timestamp: new Date(),
     });
-    
+
     // Auto-update order price for selected symbol
     if (data.symbol === selectedSymbol.value && orderForm.type === 'LIMIT' && orderForm.price === 0) {
-      orderForm.price = data.price;
+      orderForm.price = data.lastPrice;
     }
   });
 
@@ -629,11 +651,31 @@ const simulateQuotes = () => {
   }, 2000);
 };
 
+// Fetch initial quotes for all monitored symbols
+const fetchInitialQuotes = async () => {
+  for (const sym of monitoredSymbols) {
+    await fetchQuote(sym);
+  }
+};
+
 // Lifecycle
 onMounted(async () => {
-  await Promise.all([fetchAssets(), fetchPositions(), fetchOrders()]);
+  // Fetch initial data from API
+  await Promise.all([
+    fetchAssets(),
+    fetchPositions(),
+    fetchOrders(),
+    fetchInitialQuotes(),
+  ]);
+
+  // Connect WebSocket for real-time updates
   connectWebSocket();
-  simulateQuotes();
+
+  // Start simulated quotes only as fallback
+  // In production, real-time data should come through WebSocket
+  if (quotes.value.size === 0) {
+    simulateQuotes();
+  }
 });
 
 onUnmounted(() => {

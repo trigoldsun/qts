@@ -31,6 +31,10 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          volumeMounts:
+            - name: market-config
+              mountPath: /app/config
+              readOnly: true
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: "dev"
@@ -59,6 +63,10 @@ spec:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 5
+      volumes:
+        - name: market-config
+          configMap:
+            name: market-service-config
 ---
 apiVersion: v1
 kind: Service

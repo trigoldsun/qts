@@ -109,3 +109,152 @@ data:
   REDIS_PORT: "6379"
   REDIS_DB: "0"
   REDIS_POOL_SIZE: "20"
+---
+# Market Service Configuration (Spring Boot)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: market-service-config
+  namespace: qts-dev
+data:
+  application.yaml: |
+    spring:
+      application:
+        name: market-service
+      profiles:
+        active: dev
+      redis:
+        host: ${REDIS_HOST:redis.qts-dev.svc.cluster.local}
+        port: ${REDIS_PORT:6379}
+        database: 0
+        timeout: 5000ms
+        lettuce:
+          pool:
+            max-active: 8
+            max-idle: 8
+            min-idle: 2
+            max-wait: -1ms
+      cache:
+        type: redis
+        redis:
+          time-to-live: 60000
+    server:
+      port: 8080
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics,prometheus
+      endpoint:
+        health:
+          show-details: always
+    market:
+      data:
+        refresh-interval: 1000
+        symbols:
+          - BTC-USDT
+          - ETH-USDT
+          - BNB-USDT
+      cache:
+        enabled: true
+        ttl: 300
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: market-service-config
+  namespace: qts-staging
+data:
+  application.yaml: |
+    spring:
+      application:
+        name: market-service
+      profiles:
+        active: staging
+      redis:
+        host: ${REDIS_HOST:redis.qts-staging.svc.cluster.local}
+        port: ${REDIS_PORT:6379}
+        database: 0
+        timeout: 5000ms
+        lettuce:
+          pool:
+            max-active: 16
+            max-idle: 8
+            min-idle: 4
+            max-wait: -1ms
+      cache:
+        type: redis
+        redis:
+          time-to-live: 60000
+    server:
+      port: 8080
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics,prometheus
+      endpoint:
+        health:
+          show-details: always
+    market:
+      data:
+        refresh-interval: 500
+        symbols:
+          - BTC-USDT
+          - ETH-USDT
+          - BNB-USDT
+          - SOL-USDT
+      cache:
+        enabled: true
+        ttl: 120
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: market-service-config
+  namespace: qts-prod
+data:
+  application.yaml: |
+    spring:
+      application:
+        name: market-service
+      profiles:
+        active: prod
+      redis:
+        host: ${REDIS_HOST:redis.qts-prod.svc.cluster.local}
+        port: ${REDIS_PORT:6379}
+        database: 0
+        timeout: 5000ms
+        lettuce:
+          pool:
+            max-active: 32
+            max-idle: 16
+            min-idle: 8
+            max-wait: -1ms
+      cache:
+        type: redis
+        redis:
+          time-to-live: 30000
+    server:
+      port: 8080
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics,prometheus
+      endpoint:
+        health:
+          show-details: always
+    market:
+      data:
+        refresh-interval: 200
+        symbols:
+          - BTC-USDT
+          - ETH-USDT
+          - BNB-USDT
+          - SOL-USDT
+          - ADA-USDT
+          - DOT-USDT
+      cache:
+        enabled: true
+        ttl: 60

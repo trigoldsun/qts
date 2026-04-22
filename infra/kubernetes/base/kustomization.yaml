@@ -7,6 +7,8 @@ resources:
   - services/rbac.yaml
   - services/configmaps.yaml
   - services/secrets.yaml
+  - services/postgres.yaml
+  - services/redis.yaml
   - services/api-gateway.yaml
   - services/bff-web.yaml
   - services/biz-trade.yaml
