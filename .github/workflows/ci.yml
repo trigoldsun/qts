@@ -31,3 +31,9 @@ jobs:
 
     - name: Test biz-risk
       run: cd services/biz-risk && mvn -B test -q
+
+    - name: Build market-service
+      run: cd services/market-service && mvn -B clean compile -q
+
+    - name: Test market-service
+      run: cd services/market-service && mvn -B test -q
