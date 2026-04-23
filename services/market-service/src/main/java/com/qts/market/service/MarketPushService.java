@@ -90,6 +90,11 @@ public class MarketPushService {
             log.info("Session {} unsubscribed from {}_{}, remaining: {}", 
                     sessionId, symbol, period,
                     subscriptions.get(key).size());
+            
+            // Clean up empty subscription sets
+            if (subscriptions.get(key).isEmpty()) {
+                subscriptions.remove(key);
+            }
         }
     }
 
