@@ -37,24 +37,10 @@ public class KlineController {
      */
     @GetMapping("/kline")
     public ResponseEntity<ApiResponse<KlineResponse>> getKline(
-            @RequestParam String symbol,
-            @RequestParam String period,
-            @RequestParam(required = false) LocalDateTime startTime,
-            @RequestParam(required = false) LocalDateTime endTime,
-            @RequestParam(required = false, defaultValue = "100") Integer count,
-            @RequestParam(required = false, defaultValue = "NONE") AdjustmentType adjustment) {
+            @ModelAttribute @Valid KlineQueryRequest request) {
 
         log.info("GET /v1/market/kline - symbol={}, period={}, count={}, adjustment={}",
-                symbol, period, count, adjustment);
-
-        KlineQueryRequest request = KlineQueryRequest.builder()
-                .symbol(symbol)
-                .period(period)
-                .startTime(startTime)
-                .endTime(endTime)
-                .count(count)
-                .adjustment(adjustment)
-                .build();
+                request.getSymbol(), request.getPeriod(), request.getCount(), request.getAdjustment());
 
         KlineResponse response = klineService.queryKline(request);
 
