@@ -1,5 +1,8 @@
 package com.qts.biz.trade.client;
 
+import com.qts.biz.risk.grpc.RiskCheckRequestProto;
+import com.qts.biz.risk.grpc.RiskCheckResponseProto;
+import com.qts.biz.risk.grpc.RiskServiceGrpc;
 import com.qts.biz.trade.config.RiskConfig;
 import io.grpc.ManagedChannel;
 import org.slf4j.Logger;
@@ -20,11 +23,13 @@ public class RiskCheckClient {
 
     private final ManagedChannel channel;
     private final RiskConfig riskConfig;
+    private final RiskServiceGrpc riskServiceGrpc;
 
     @Autowired
     public RiskCheckClient(ManagedChannel channel, RiskConfig riskConfig) {
         this.channel = channel;
         this.riskConfig = riskConfig;
+        this.riskServiceGrpc = new RiskServiceGrpc(channel);
     }
 
     /**
@@ -42,12 +47,28 @@ public class RiskCheckClient {
                     accountId, symbol, side);
         
         try {
-            // TODO: Implement actual gRPC call to risk-service
-            // For now, return a permissive result
+            // Build the gRPC request
+            RiskCheckRequestProto request = RiskCheckRequestProto.newBuilder()
+                    .setAccountId(String.valueOf(accountId))
+                    .setSymbol(symbol)
+                    .setSide(side)
+                    .setPrice(price != null ? price : 0.0)
+                    .setQuantity(quantity != null ? quantity.intValue() : 0)
+                    .setOrderAmount(price != null && quantity != null ? price * quantity : 0.0)
+                    .build();
+
+            // Make the actual gRPC call to risk-service
+            RiskCheckResponseProto response = riskServiceGrpc.checkRisk(request);
+
+            // Map the response to our internal result
             RiskCheckResult result = new RiskCheckResult();
-            result.setPassed(true);
+            result.setPassed(response.isPassed());
             result.setAccountId(accountId);
-            result.setMessage("Risk check passed");
+            result.setMessage(response.getMessage());
+            result.setRejectCode(response.getRejectCode());
+            
+            logger.info("Risk check completed for accountId={}: passed={}", 
+                       accountId, response.isPassed());
             return result;
         } catch (Exception e) {
             logger.error("Risk check failed for accountId={}: {}", accountId, e.getMessage());

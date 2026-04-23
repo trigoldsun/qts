@@ -2,14 +2,19 @@ package com.qts.biz.risk.precheck;
 
 import com.qts.biz.risk.precheck.dto.PreCheckRequest;
 import com.qts.biz.risk.precheck.dto.PreCheckResponse;
+import com.qts.biz.risk.precheck.service.AssetService;
+import com.qts.biz.risk.precheck.service.MarketDataService;
+import com.qts.biz.risk.precheck.service.PositionService;
 import com.qts.biz.risk.precheck.validator.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,9 +35,18 @@ public class PreCheckService {
     private static final Logger logger = LoggerFactory.getLogger(PreCheckService.class);
 
     private final List<PreCheckValidator> validators;
+    private final PositionService positionService;
+    private final AssetService assetService;
+    private final MarketDataService marketDataService;
 
-    public PreCheckService() {
+    @Autowired
+    public PreCheckService(PositionService positionService,
+                          AssetService assetService,
+                          MarketDataService marketDataService) {
         this.validators = new ArrayList<>();
+        this.positionService = positionService;
+        this.assetService = assetService;
+        this.marketDataService = marketDataService;
         // Initialize validators in order
         this.validators.add(new TradingSessionValidator());
         this.validators.add(new FundValidator());
@@ -98,17 +112,33 @@ public class PreCheckService {
 
     /**
      * Build validation context from external data sources
-     * In production, this would fetch from position/asset/price services
+     * Uses injected services to fetch real-time data
      */
     private ValidationContext buildContext(PreCheckRequest request) {
-        // TODO: Inject services to fetch real data
-        // For now, using mock data structure - actual implementation should call:
-        // - PositionService.getPosition(accountId, symbol)
-        // - AssetService.getAsset(accountId)
-        // - MarketDataService.getPreviousClose(symbol)
-        
+        Long accountId = request.getAccountId();
+        String symbol = request.getSymbol();
+
+        // Fetch position data from PositionService
+        Map<String, BigDecimal> positionMap = new HashMap<>();
+        positionMap.put(symbol, positionService.getPosition(accountId, symbol));
+
+        // Fetch asset data from AssetService
+        BigDecimal totalAssets = assetService.getTotalAssets(accountId);
+        BigDecimal availableCash = assetService.getAvailableCash(accountId);
+
+        // Fetch price data from MarketDataService
+        Map<String, BigDecimal> priceMap = new HashMap<>();
+        BigDecimal previousClose = marketDataService.getPreviousClose(symbol);
+        if (previousClose != null) {
+            priceMap.put(symbol, previousClose);
+        }
+
         return new ValidationContext.Builder()
-                .accountId(request.getAccountId())
+                .accountId(accountId)
+                .positionMap(positionMap)
+                .priceMap(priceMap)
+                .totalAssets(totalAssets)
+                .availableCash(availableCash)
                 .currentTime(LocalDateTime.now())
                 .build();
     }

@@ -1,0 +1,22 @@
+server:
+  http_port: 8086
+  ws_port: 8087
+
+simnow:
+  front_addr: "tcp://127.0.0.1:41205"
+  broker_id: "9999"
+  user_id: ""
+  password: ""
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+
+kafka:
+  brokers:
+    - "localhost:9092"
+  topic: "qts.market.quotes"
+
+allowed_origins: "http://localhost:3000,https://qts.example.com"

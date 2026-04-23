@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -87,15 +88,7 @@ public class DailySettlementService {
         log.info("Created settlement task: {}", settleId);
 
         // 3. 执行清算（异步或同步，取决于规模）
-        try {
-            executeSettlement(task, accountIds);
-        } catch (Exception e) {
-            log.error("Settlement failed: {}", e.getMessage(), e);
-            task.setStatus(SettlementStatus.FAILED);
-            task.setErrorMessage(e.getMessage());
-            task.setCompletedAt(LocalDateTime.now());
-            settlementTaskRepository.save(task);
-        }
+        executeSettlement(task, accountIds);
 
         return DailySettlementResponse.builder()
                 .settleId(task.getSettleId())
@@ -109,7 +102,8 @@ public class DailySettlementService {
     /**
      * 执行清算逻辑
      */
-    private void executeSettlement(SettlementTaskEntity task, List<String> accountIds) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void executeSettlement(SettlementTaskEntity task, List<String> accountIds) {
         log.info("Executing settlement: {}", task.getSettleId());
 
         // 获取所有需要清算的账户（实际应从BIZ-TRADE获取）
@@ -119,27 +113,35 @@ public class DailySettlementService {
         int processed = 0;
         int failed = 0;
 
-        if (accountsToSettle != null) {
-            for (String accountId : accountsToSettle) {
-                try {
-                    settleAccount(task.getSettleId(), accountId, task.getSettleDate());
-                    processed++;
-                } catch (Exception e) {
-                    log.error("Failed to settle account {}: {}", accountId, e.getMessage());
-                    failed++;
+        try {
+            if (accountsToSettle != null) {
+                for (String accountId : accountsToSettle) {
+                    try {
+                        settleAccount(task.getSettleId(), accountId, task.getSettleDate());
+                        processed++;
+                    } catch (Exception e) {
+                        log.error("Failed to settle account {}: {}", accountId, e.getMessage());
+                        failed++;
+                    }
                 }
             }
+
+            // 更新任务状态
+            task.setProcessedCount(processed);
+            task.setFailedCount(failed);
+            task.setStatus(failed > 0 && processed == 0 ? SettlementStatus.FAILED : SettlementStatus.COMPLETED);
+            task.setCompletedAt(LocalDateTime.now());
+            settlementTaskRepository.save(task);
+
+            log.info("Settlement completed: {}, processed: {}, failed: {}",
+                    task.getSettleId(), processed, failed);
+        } catch (Exception e) {
+            task.setStatus(SettlementStatus.FAILED);
+            task.setErrorMessage(e.getMessage());
+            task.setCompletedAt(LocalDateTime.now());
+            settlementTaskRepository.save(task);
+            throw e;
         }
-
-        // 更新任务状态
-        task.setProcessedCount(processed);
-        task.setFailedCount(failed);
-        task.setStatus(failed > 0 && processed == 0 ? SettlementStatus.FAILED : SettlementStatus.COMPLETED);
-        task.setCompletedAt(LocalDateTime.now());
-        settlementTaskRepository.save(task);
-
-        log.info("Settlement completed: {}, processed: {}, failed: {}", 
-                task.getSettleId(), processed, failed);
     }
 
     /**

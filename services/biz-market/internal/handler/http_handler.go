@@ -14,31 +14,52 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/qts/biz-market/internal/service"
+	"github.com/qts/biz-market/internal/model"
 	ws "github.com/qts/biz-market/internal/websocket"
 
 	"github.com/gin-gonic/gin"
 	wsutil "github.com/gorilla/websocket"
 )
 
+// MarketServiceInterface defines the interface for market service methods used by handler
+type MarketServiceInterface interface {
+	GetQuote(symbol string) (*model.QuoteData, error)
+	GetKline(symbol, period string, limit int) ([]*model.KlineData, error)
+	GetSymbols() []*model.SymbolInfo
+	GetSymbol(symbol string) (*model.SymbolInfo, error)
+	GetWSManager() *ws.ConnectionManager
+	HandleWSMessage(connID string, message []byte) error
+}
+
 var upgrader = wsutil.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // 允许所有来源（生产环境应限制）
+		allowedOrigins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // 浏览器省略 Origin 的请求
+		}
+		for _, allowed := range allowedOrigins {
+			if strings.TrimSpace(allowed) == origin {
+				return true
+			}
+		}
+		return false
 	},
 }
 
 // HTTPHandler HTTP处理器
 type HTTPHandler struct {
-	marketSvc *service.MarketService
+	marketSvc MarketServiceInterface
 }
 
 // NewHTTPHandler 创建HTTP处理器
-func NewHTTPHandler(marketSvc *service.MarketService) *HTTPHandler {
+func NewHTTPHandler(marketSvc MarketServiceInterface) *HTTPHandler {
 	return &HTTPHandler{
 		marketSvc: marketSvc,
 	}

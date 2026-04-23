@@ -1,5 +1,7 @@
 package com.qts.biz.trade.service;
 
+import com.qts.biz.account.grpc.AccountServiceClient;
+import com.qts.biz.asset.grpc.AssetServiceClient;
 import com.qts.biz.trade.client.RiskCheckClient;
 import com.qts.biz.trade.dto.*;
 import com.qts.biz.trade.entity.OrderEntity;
@@ -49,16 +51,22 @@ public class OrderCommandService {
     private final OrderStateMachine stateMachine;
     private final OrderEventPublisher eventPublisher;
     private final RiskCheckClient riskCheckClient;
+    private final AccountServiceClient accountServiceClient;
+    private final AssetServiceClient assetServiceClient;
 
     @Autowired
     public OrderCommandService(OrderRepository orderRepository,
                                OrderStateMachine stateMachine,
                                OrderEventPublisher eventPublisher,
-                               RiskCheckClient riskCheckClient) {
+                               RiskCheckClient riskCheckClient,
+                               AccountServiceClient accountServiceClient,
+                               AssetServiceClient assetServiceClient) {
         this.orderRepository = orderRepository;
         this.stateMachine = stateMachine;
         this.eventPublisher = eventPublisher;
         this.riskCheckClient = riskCheckClient;
+        this.accountServiceClient = accountServiceClient;
+        this.assetServiceClient = assetServiceClient;
     }
 
     /**
@@ -231,18 +239,39 @@ public class OrderCommandService {
     }
 
     private void validateAccountExists(String accountId) {
-        // Mock implementation - in real system call account service via gRPC
+        // Validate account exists via gRPC
         if (accountId == null || accountId.isEmpty()) {
             throw new BusinessException(CODE_ACCOUNT_NOT_FOUND, "Account not found");
         }
-        // TODO: Call account service to verify account exists
+        
+        AccountServiceClient.AccountValidationResult result = 
+            accountServiceClient.validateAccount(accountId);
+        
+        if (!result.isValid()) {
+            logger.warn("Account validation failed for {}: {}", accountId, result.getMessage());
+            throw new BusinessException(CODE_ACCOUNT_NOT_FOUND, 
+                "Account validation failed: " + result.getMessage());
+        }
     }
 
     private void checkFundSufficiency(PlaceOrderCmd cmd) {
-        // Mock implementation - in real system call asset service
-        // For BUY orders, check if sufficient cash
-        // For SELL orders, check if sufficient position
-        // TODO: Call asset service via gRPC
+        // Check fund sufficiency via gRPC
+        double amount = cmd.getPrice() != null ? 
+            cmd.getPrice().doubleValue() * cmd.getQuantity() : 0.0;
+        
+        AssetServiceClient.AssetCheckResult result = assetServiceClient.checkSufficiency(
+            cmd.getAccountId(),
+            cmd.getSymbol(),
+            cmd.getSide().name(),
+            amount,
+            cmd.getQuantity() != null ? cmd.getQuantity() : 0
+        );
+        
+        if (!result.isSufficient()) {
+            logger.warn("Insufficient funds for account {}: {}", cmd.getAccountId(), result.getMessage());
+            throw new BusinessException(CODE_INSUFFICIENT_FUNDS, 
+                "Insufficient funds: " + result.getMessage());
+        }
     }
 
     private void performRiskPrecheck(PlaceOrderCmd cmd) {

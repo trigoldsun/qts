@@ -1,0 +1,133 @@
+/* === QTS Design Tokens === */
+/* Based on BreezeUI design system, adapted for Chinese financial trading scenarios */
+
+/* Primitive Colors — Base palette */
+:root {
+  /* Trading colors (China convention: red for rise, green for fall) */
+  --color-rise: #C41E3A;        /* Chinese red - rise/buy */
+  --color-fall: #089981;        /* Emerald green - fall/sell */
+  --color-neutral: #6B7280;     /* Neutral gray */
+
+  /* Alert colors */
+  --color-info: #4A9FFF;       /* Sky blue - info */
+  --color-warning: #F59E0B;      /* Orange - warning */
+  --color-critical: #DC2626;    /* Red - critical */
+  --color-success: #10B981;     /* Emerald - success */
+
+  /* Background colors - Dark theme */
+  --bg-primary: #1a1a2e;        /* Dark main background */
+  --bg-secondary: #16213e;     /* Dark card background */
+  --bg-elevated: #1f2937;      /* Dark elevated layer */
+  --bg-surface: #F8FAFE;        /* Light main background */
+
+  /* Text colors - Dark theme */
+  --text-primary: #F9FAFB;      /* Primary text - dark theme */
+  --text-secondary: #9CA3AF;    /* Secondary text - dark theme */
+  --text-surface: #1F2937;      /* Primary text - light theme */
+  --text-surface-secondary: #6B7280; /* Secondary text - light theme */
+
+  /* Border colors */
+  --border-default: #374151;
+  --border-light: #E5E7EB;
+
+  /* Spacing system (4px base) */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Border radius system */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Font families */
+  --font-sans: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SF Mono', 'Consolas', monospace;
+
+  /* Font size system */
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 32px;
+
+  /* Shadow system */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* === 中国风配色系统 === */
+/* 中国传统色彩灵感：故宫、敦煌、水墨 */
+:root {
+  /* 故宫色系 */
+  --chinese-red: #C41E3A;           /* 朱砂红 - 上涨/警示 */
+  --chinese-red-dark: #8B0000;      /* 暗红 */
+  --chinese-red-light: #E9967A;     /* 淡红 */
+
+  --chinese-gold: #D4AF37;          /* 琉璃金 - 强调/成就 */
+  --chinese-gold-dark: #B8860B;     /* 暗金 */
+  --chinese-gold-light: #FFD700;    /* 亮金 */
+
+  --chinese-green: #2E8B57;         /* 玉绿 - 翠绿替代 */
+  --chinese-teal: #008080;          /* 青绿 */
+  --chinese-blue: #1E4D6B;          /* 藏青 */
+  --chinese-indigo: #3D5A80;        /* 靛蓝 */
+
+  --chinese-ink: #1A1A1A;           /* 墨色 - 深色背景 */
+  --chinese-ink-light: #2D2D2D;     /* 淡墨 */
+  --chinese-cream: #F5F5DC;         /* 宣纸白 - 亮色背景 */
+  --chinese-slate: #708090;         /* 青灰 */
+
+  /* 水墨渐变 */
+  --chinese-ink-gradient: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 50%, #1A1A1A 100%);
+  --chinese-mist-gradient: linear-gradient(180deg, rgba(245,245,220,0.1) 0%, transparent 100%);
+
+  /* 中式纹样（用于背景装饰） */
+  --pattern-cloud: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23D4AF37' fill-opacity='0.15' d='M50 10c-5 0-10 5-10 15 0 5 2 8 5 10-8 3-15 10-15 20 0 15 12 25 25 25 3 0 5-1 8-2-2 8-2 15 2 20 5-8 12-12 20-12 15 0 25-12 25-25 0-10-7-17-15-20 3-2 5-5 5-10 0-10-5-15-10-15-5 0-8 3-10 5-2-5-5-8-10-8z'/%3E%3C/svg%3E");
+  --pattern-wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20'%3E%3Cpath stroke='%23D4AF37' stroke-opacity='0.1' fill='none' stroke-width='1' d='M0 10 Q 12.5 5, 25 10 T 50 10 T 75 10 T 100 10'/%3E%3C/svg%3E");
+  --pattern-bamboo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 60'%3E%3Crect fill='%232E8B57' fill-opacity='0.1' x='45' y='0' width='10' height='60' rx='2'/%3E%3Crect fill='%232E8B57' fill-opacity='0.15' x='20' y='10' width='8' height='40' rx='2'/%3E%3Crect fill='%232E8B57' fill-opacity='0.15' x='72' y='15' width='8' height='35' rx='2'/%3E%3C/svg%3E");
+
+  /* 中式字体栈 */
+  --font-chinese: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', serif;
+  --font-chinese-display: 'Ma Shan Zheng', cursive;  /* 毛笔书法 */
+
+  /* 传统间距（基于宋式权衡） */
+  --chinese-spacing-tight: 8px;
+  --chinese-spacing-normal: 16px;
+  --chinese-spacing-loose: 32px;
+  --chinese-spacing-expansive: 64px;
+
+  /* 中式圆角（较小，更方正） */
+  --chinese-radius-sm: 2px;
+  --chinese-radius-md: 4px;
+  --chinese-radius-lg: 8px;
+}
+
+/* 主题切换能力 */
+:root[data-theme="dark"] {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-elevated: #1f2937;
+  --bg-surface: #F8FAFE;
+  --color-accent: #4A9FFF;
+  --color-accent-light: #7DB8FF;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #F8FAFE;
+  --bg-secondary: #F3F4F6;
+  --bg-elevated: #FFFFFF;
+  --bg-surface: #1F2937;
+  --color-accent: #4A9FFF;
+  --color-accent-light: #7DB8FF;
+}
+
+:root[data-theme="chinese-traditional"] {
+  /* 由 src/styles/themes/chinese-traditional.css 提供 */
+}

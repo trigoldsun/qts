@@ -4,19 +4,20 @@ kind: Kustomization
 
 namespace: qts-dev
 
-bases:
-  - services/namespace
-  - services/rbac
-  - services/configmaps
-  - services/secrets
-  - services/api-gateway
-  - services/bff-web
-  - services/biz-trade
-  - services/biz-risk
-  - services/market-service
-  - services/auth-service
-  - services/hpa
-  - services/ingress
+resources:
+  - ../../namespace.yaml
+  - ../../services/rbac.yaml
+  - ../../services/configmaps.yaml
+  - ../../services/secrets.yaml
+  - ../../services/postgres.yaml
+  - ../../services/api-gateway.yaml
+  - ../../services/bff-web.yaml
+  - ../../services/biz-trade.yaml
+  - ../../services/biz-risk.yaml
+  - ../../services/market-service.yaml
+  - ../../services/auth-service.yaml
+  - ../../services/hpa.yaml
+  - ../../services/ingress.yaml
 
 commonLabels:
   app: qts

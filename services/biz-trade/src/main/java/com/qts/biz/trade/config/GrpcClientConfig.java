@@ -42,6 +42,22 @@ public class GrpcClientConfig {
                 .build();
     }
 
+    @Bean
+    public ManagedChannel accountChannel(AccountConfig accountConfig) {
+        return ManagedChannelBuilder
+                .forTarget(accountConfig.getTarget())
+                .usePlaintext()
+                .build();
+    }
+
+    @Bean
+    public ManagedChannel assetChannel(AssetConfig assetConfig) {
+        return ManagedChannelBuilder
+                .forTarget(assetConfig.getTarget())
+                .usePlaintext()
+                .build();
+    }
+
     public int getShutdownTimeoutSeconds() {
         return shutdownTimeoutSeconds;
     }
