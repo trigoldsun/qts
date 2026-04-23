@@ -6,10 +6,11 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	SimNow   SimNowConfig   `yaml:"simnow"`
-	Redis    RedisConfig    `yaml:"redis"`
-	Kafka    KafkaConfig    `yaml:"kafka"`
+	Server         ServerConfig   `yaml:"server"`
+	SimNow         SimNowConfig   `yaml:"simnow"`
+	Redis          RedisConfig    `yaml:"redis"`
+	Kafka          KafkaConfig    `yaml:"kafka"`
+	AllowedOrigins string         `yaml:"allowed_origins"`
 }
 
 type ServerConfig struct {

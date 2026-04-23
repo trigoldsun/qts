@@ -1,0 +1,295 @@
+/* === QTS Responsive Design System === */
+
+/* Responsive Breakpoints */
+:root {
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1200px;
+  --breakpoint-mobile: 480px;
+}
+
+/* === Container System === */
+.container {
+  width: 100%;
+  padding: 0 var(--spacing-md);
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding: 0 var(--spacing-lg);
+  }
+}
+
+@media (min-width: 1200px) {
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+}
+
+/* === Show/Hide Utilities === */
+.hide-mobile {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .hide-mobile {
+    display: initial;
+  }
+}
+
+.hide-tablet {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .hide-tablet {
+    display: initial;
+  }
+}
+
+@media (min-width: 1200px) {
+  .hide-tablet {
+    display: none;
+  }
+}
+
+.show-tablet-only {
+  display: none;
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .show-tablet-only {
+    display: initial;
+  }
+}
+
+.show-mobile-only {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .show-mobile-only {
+    display: initial;
+  }
+}
+
+.show-desktop-only {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .show-desktop-only {
+    display: initial;
+  }
+}
+
+/* === Grid System === */
+.grid {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 1199px) {
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* === Flex Utilities === */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.gap-xs { gap: var(--spacing-xs); }
+.gap-sm { gap: var(--spacing-sm); }
+.gap-md { gap: var(--spacing-md); }
+.gap-lg { gap: var(--spacing-lg); }
+
+/* === Information Density === */
+/* Desktop: Full information display */
+.info-full {
+  display: flex;
+}
+
+/* Tablet: Compact information */
+@media (max-width: 1199px) {
+  .info-full {
+    display: none;
+  }
+  .info-compact {
+    display: block;
+  }
+}
+
+/* Mobile: Minimal information */
+@media (max-width: 767px) {
+  .info-compact {
+    display: none;
+  }
+  .info-minimal {
+    display: block;
+  }
+}
+
+/* === Responsive Text === */
+.text-xs { font-size: var(--font-size-xs); }
+.text-sm { font-size: var(--font-size-sm); }
+.text-md { font-size: var(--font-size-md); }
+.text-lg { font-size: var(--font-size-lg); }
+.text-xl { font-size: var(--font-size-xl); }
+
+@media (max-width: 767px) {
+  .text-xl { font-size: var(--font-size-lg); }
+  .text-lg { font-size: var(--font-size-md); }
+}
+
+/* === Responsive Spacing === */
+.section {
+  margin-bottom: var(--spacing-md);
+}
+
+@media (min-width: 768px) {
+  .section {
+    margin-bottom: var(--spacing-lg);
+  }
+}
+
+/* === Scrollable Container for Mobile === */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-x::-webkit-scrollbar {
+  height: 4px;
+}
+
+.scroll-x::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+.scroll-x::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 2px;
+}
+
+/* === Safe Area for Mobile === */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+/* === Touch Target Size (min 44px for mobile) === */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* === Responsive Card Styling === */
+.card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-md);
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: var(--spacing-lg);
+  }
+}
+
+/* === Mobile Bottom Sheet Trigger === */
+.mobile-sheet-trigger {
+  position: fixed;
+  bottom: var(--spacing-lg);
+  right: var(--spacing-lg);
+  z-index: 100;
+}
+
+@media (min-width: 768px) {
+  .mobile-sheet-trigger {
+    display: none;
+  }
+}
+
+/* === Full-screen Modal for Mobile Order Form === */
+@media (max-width: 767px) {
+  .order-form-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-primary);
+    z-index: 1000;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .order-form-overlay .order-section {
+    min-height: 100vh;
+    border-radius: 0;
+    padding: var(--spacing-lg);
+  }
+}
+
+/* === Responsive Table Wrapper === */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll table {
+  min-width: 600px;
+}
+
+/* === Status Indicator Responsive === */
+@media (max-width: 767px) {
+  .status-pill {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}

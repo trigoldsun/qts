@@ -1,5 +1,5 @@
 <template>
-  <div class="trading-panel">
+  <div class="trading-panel" :class="{ 'tablet-mode': isTablet, 'mobile-mode': isMobile }">
     <!-- Header with account info -->
     <div class="panel-header">
       <div class="account-info">
@@ -8,7 +8,11 @@
       </div>
       <div class="connection-status" :class="{ connected: wsConnected }">
         <span class="status-dot"></span>
-        {{ wsConnected ? '实时连接' : '连接中...' }}
+        <span class="hide-mobile">{{ wsConnected ? '实时连接' : '连接中...' }}</span>
+        <span class="show-mobile-only">{{ wsConnected ? '已连接' : '连接中' }}</span>
+      </div>
+      <div class="header-actions">
+        <ThemeToggle />
       </div>
     </div>
 
@@ -21,7 +25,7 @@
           <div v-for="asset in assets" :key="asset.assetId" class="asset-card">
             <div class="asset-currency">{{ asset.currency }}</div>
             <div class="asset-available">{{ formatNumber(asset.available) }}</div>
-            <div class="asset-locked" v-if="asset.locked > 0">
+            <div class="asset-locked info-compact" v-if="asset.locked > 0">
               冻结: {{ formatNumber(asset.locked) }}
             </div>
           </div>
@@ -29,205 +33,53 @@
         <div class="loading" v-else>加载资金...</div>
       </div>
 
-      <!-- Market Overview -->
-      <div class="market-section">
-        <h3>行情监控</h3>
-        <div class="market-tabs">
-          <button 
-            v-for="sym in monitoredSymbols" 
-            :key="sym"
-            :class="['tab-btn', { active: selectedSymbol === sym }]"
-            @click="selectSymbol(sym)"
-          >
-            {{ sym }}
-          </button>
-        </div>
-        <div class="market-data" v-if="currentQuote">
-          <div class="quote-price" :class="priceDirection">
-            {{ formatPrice(currentQuote.price) }}
-          </div>
-          <div class="quote-change" :class="priceDirection">
-            <span>{{ currentQuote.change >= 0 ? '+' : '' }}{{ currentQuote.change.toFixed(2) }}%</span>
-          </div>
-          <div class="quote-details">
-            <div>高: {{ formatPrice(currentQuote.high) }}</div>
-            <div>低: {{ formatPrice(currentQuote.low) }}</div>
-            <div>量: {{ formatVolume(currentQuote.volume) }}</div>
-          </div>
-        </div>
-        <div class="loading" v-else>加载行情...</div>
-      </div>
+      <!-- Market Summary Component -->
+      <MarketSummary 
+        :symbols="monitoredSymbols"
+        :selected-symbol="selectedSymbol"
+        :quotes="quotes"
+        @select="handleSelectMarket"
+      />
     </div>
 
     <!-- Middle Section: Positions + Quick Order -->
     <div class="middle-section">
-      <!-- Positions Display -->
-      <div class="positions-section">
-        <h3>持仓信息</h3>
-        <table class="positions-table" v-if="positions.length > 0">
-          <thead>
-            <tr>
-              <th>品种</th>
-              <th>数量</th>
-              <th>均价</th>
-              <th>现价</th>
-              <th>浮盈亏</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="pos in positions" :key="pos.positionId">
-              <td class="symbol-cell">{{ pos.symbol }}</td>
-              <td>{{ formatNumber(pos.quantity) }}</td>
-              <td>{{ formatPrice(pos.avgPrice) }}</td>
-              <td>{{ getMarketPrice(pos.symbol) }}</td>
-              <td :class="pos.unrealizedPnl >= 0 ? 'profit' : 'loss'">
-                {{ pos.unrealizedPnl >= 0 ? '+' : '' }}{{ formatNumber(pos.unrealizedPnl) }}
-              </td>
-              <td>
-                <button class="btn-sell" @click="openCloseDialog(pos)">平仓</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="empty-state" v-else>
-          <span>暂无持仓</span>
-        </div>
-      </div>
+      <!-- Position Table Component -->
+      <PositionTable 
+        :positions="positions"
+        :quotes="quotes"
+        @close="handleClosePosition"
+      />
 
-      <!-- Quick Order Form -->
-      <div class="order-section">
-        <h3>快捷下单</h3>
-        <div class="order-form">
-          <div class="symbol-display">
-            <span class="label">交易品种</span>
-            <span class="value">{{ orderForm.symbol || '请选择' }}</span>
-          </div>
-
-          <div class="order-type-selector">
-            <button 
-              :class="['type-btn', { active: orderForm.side === 'BUY' }]"
-              @click="orderForm.side = 'BUY'"
-            >
-              买入
-            </button>
-            <button 
-              :class="['type-btn', { active: orderForm.side === 'SELL' }]"
-              @click="orderForm.side = 'SELL'"
-            >
-              卖出
-            </button>
-          </div>
-
-          <div class="order-kind-selector">
-            <button 
-              :class="['kind-btn', { active: orderForm.type === 'LIMIT' }]"
-              @click="orderForm.type = 'LIMIT'"
-            >
-              限价
-            </button>
-            <button 
-              :class="['kind-btn', { active: orderForm.type === 'MARKET' }]"
-              @click="orderForm.type = 'MARKET'"
-            >
-              市价
-            </button>
-          </div>
-
-          <div class="form-group" v-if="orderForm.type === 'LIMIT'">
-            <label>价格</label>
-            <input 
-              type="number" 
-              v-model.number="orderForm.price"
-              :placeholder="currentQuote ? formatPrice(currentQuote.price) : '0'"
-              step="0.01"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>数量</label>
-            <input 
-              type="number" 
-              v-model.number="orderForm.quantity"
-              placeholder="数量"
-              step="0.001"
-            />
-          </div>
-
-          <div class="quick-amounts">
-            <button @click="setQuantity(0.1)">10%</button>
-            <button @click="setQuantity(0.25)">25%</button>
-            <button @click="setQuantity(0.5)">50%</button>
-            <button @click="setQuantity(1)">100%</button>
-          </div>
-
-          <div class="order-summary">
-            <div>预估金额: <span>{{ estimatedAmount }} USDT</span></div>
-            <div>可平数量: <span>{{ closeableQuantity }}</span></div>
-          </div>
-
-          <button 
-            :class="['btn-submit', orderForm.side === 'BUY' ? 'btn-buy' : 'btn-sell']"
-            @click="submitOrder"
-            :disabled="submitting"
-          >
-            {{ submitting ? '提交中...' : (orderForm.side === 'BUY' ? '买入' : '卖出') }}
-          </button>
-
-          <div class="error-msg" v-if="errorMsg">{{ errorMsg }}</div>
-        </div>
-      </div>
+      <!-- Order Form Component -->
+      <OrderForm 
+        :selected-symbol="orderForm.symbol"
+        :current-quote="currentQuote"
+        :assets="assets"
+        :positions="positions"
+        :is-mobile="isMobile"
+        :mobile-expanded="mobileOrderExpanded"
+        @submit="handleSubmitOrder"
+        @update:mobileExpanded="mobileOrderExpanded = $event"
+      />
     </div>
 
-    <!-- Orders History -->
+    <!-- Orders Section -->
     <div class="orders-section">
-      <h3>今日委托</h3>
-      <table class="orders-table" v-if="orders.length > 0">
-        <thead>
-          <tr>
-            <th>时间</th>
-            <th>品种</th>
-            <th>方向</th>
-            <th>类型</th>
-            <th>价格</th>
-            <th>数量</th>
-            <th>已成交</th>
-            <th>状态</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="order in orders" :key="order.orderId">
-            <td>{{ formatTime(order.createdAt) }}</td>
-            <td class="symbol-cell">{{ order.symbol }}</td>
-            <td :class="order.side === 'BUY' ? 'profit' : 'loss'">
-              {{ order.side === 'BUY' ? '买入' : '卖出' }}
-            </td>
-            <td>{{ order.type === 'LIMIT' ? '限价' : '市价' }}</td>
-            <td>{{ order.type === 'LIMIT' ? formatPrice(order.price) : '市价' }}</td>
-            <td>{{ formatNumber(order.quantity) }}</td>
-            <td>{{ formatNumber(order.filledQuantity) }}</td>
-            <td>
-              <span :class="'status-' + order.status.toLowerCase()">
-                {{ statusText(order.status) }}
-              </span>
-            </td>
-            <td>
-              <button 
-                v-if="canCancel(order.status)" 
-                class="btn-cancel"
-                @click="cancelOrder(order.orderId)"
-              >
-                撤单
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="empty-state" v-else>
-        <span>暂无委托</span>
-      </div>
+      <OrderTable 
+        :orders="orders"
+        @cancel="handleCancelOrder"
+      />
     </div>
+
+    <!-- Mobile: Floating order button -->
+    <button 
+      v-if="isMobile && !mobileOrderExpanded"
+      class="mobile-sheet-trigger btn-buy touch-target"
+      @click="mobileOrderExpanded = true"
+    >
+      + 下单
+    </button>
 
     <!-- Close Position Dialog -->
     <div class="dialog-overlay" v-if="closeDialog.visible" @click.self="closeDialog.visible = false">
@@ -246,68 +98,89 @@
         </div>
       </div>
     </div>
+
+    <!-- Confirm Dialog Portal -->
+    <ConfirmDialog
+      :visible="visible"
+      v-bind="options"
+      @confirm="handleConfirm"
+      @cancel="handleCancel"
+      @update:visible="visible = $event"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { io, Socket } from 'socket.io-client';
-import { marketApi, tradeApi } from '../utils/api';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { io, Socket } from 'socket.io-client'
+import { marketApi, tradeApi } from '../utils/api'
+import { useConfirm } from '@/composables/useConfirm'
+import { useResponsive } from '@/composables/useResponsive'
+import ThemeToggle from '@/components/ThemeToggle.vue'
+import MarketSummary from '@/components/MarketSummary.vue'
+import OrderForm from '@/components/OrderForm.vue'
+import PositionTable from '@/components/PositionTable.vue'
+import OrderTable from '@/components/OrderTable.vue'
+import { formatNumber, formatPrice } from '@/utils/format'
+
+// Responsive state
+const { isMobile, isTablet, isDesktop } = useResponsive()
+
+// Confirm dialog for trade operations
+const { confirm, ConfirmDialog, handleConfirm, handleCancel } = useConfirm()
 
 // Types
 interface Asset {
-  assetId: string;
-  accountId: string;
-  currency: string;
-  available: number;
-  locked: number;
-  total: number;
+  assetId: string
+  accountId: string
+  currency: string
+  available: number
+  locked: number
+  total: number
 }
 
 interface Position {
-  positionId: string;
-  accountId: string;
-  symbol: string;
-  quantity: number;
-  avgPrice: number;
-  unrealizedPnl: number;
-  realizedPnl: number;
+  positionId: string
+  accountId: string
+  symbol: string
+  quantity: number
+  avgPrice: number
+  unrealizedPnl: number
+  realizedPnl: number
 }
 
 interface Order {
-  orderId: string;
-  accountId: string;
-  symbol: string;
-  side: 'BUY' | 'SELL';
-  type: 'LIMIT' | 'MARKET';
-  price: number;
-  quantity: number;
-  filledQuantity: number;
-  status: string;
-  createdAt: Date;
+  orderId: string
+  accountId: string
+  symbol: string
+  side: 'BUY' | 'SELL'
+  type: 'LIMIT' | 'MARKET'
+  price: number
+  quantity: number
+  filledQuantity: number
+  status: string
+  createdAt: Date
 }
 
 interface Quote {
-  symbol: string;
-  price: number;
-  change: number;
-  high: number;
-  low: number;
-  volume: number;
-  timestamp: Date;
+  symbol: string
+  price: number
+  change: number
+  high: number
+  low: number
+  volume: number
+  timestamp: Date
 }
 
 // State
-const accountId = 'ACC001';
-const assets = ref<Asset[]>([]);
-const positions = ref<Position[]>([]);
-const orders = ref<Order[]>([]);
-const monitoredSymbols = ['BTC-USDT', 'ETH-USDT'];
-const selectedSymbol = ref('BTC-USDT');
-const quotes = ref<Map<string, Quote>>(new Map());
-const wsConnected = ref(false);
-const submitting = ref(false);
-const errorMsg = ref('');
+const accountId = import.meta.env.VITE_ACCOUNT_ID || 'ACC001'
+const assets = ref<Asset[]>([])
+const positions = ref<Position[]>([])
+const orders = ref<Order[]>([])
+const monitoredSymbols = ['BTC-USDT', 'ETH-USDT']
+const selectedSymbol = ref('BTC-USDT')
+const quotes = ref<Map<string, Quote>>(new Map())
+const wsConnected = ref(false)
 
 const orderForm = reactive({
   symbol: 'BTC-USDT',
@@ -315,171 +188,166 @@ const orderForm = reactive({
   type: 'LIMIT' as 'LIMIT' | 'MARKET',
   price: 0,
   quantity: 0,
-});
+})
 
 const closeDialog = reactive({
   visible: false,
   position: null as Position | null,
   quantity: 0,
-});
+})
 
-let socket: Socket | null = null;
-let priceUpdateTimer: number | null = null;
+// Mobile order form state
+const mobileOrderExpanded = ref(false)
+
+let socket: Socket | null = null
+let priceUpdateTimer: number | null = null
 
 // Computed
-const currentQuote = computed(() => quotes.value.get(selectedSymbol.value));
-
-const priceDirection = computed(() => {
-  if (!currentQuote.value) return '';
-  return currentQuote.value.change >= 0 ? 'up' : 'down';
-});
-
-const estimatedAmount = computed(() => {
-  if (orderForm.type === 'MARKET') {
-    return (orderForm.quantity * (currentQuote.value?.price || 0)).toFixed(2);
-  }
-  return (orderForm.quantity * orderForm.price).toFixed(2);
-});
-
-const closeableQuantity = computed(() => {
-  if (orderForm.side === 'BUY') {
-    const usdtAsset = assets.value.find(a => a.currency === 'USDT');
-    if (!usdtAsset) return 0;
-    const maxQty = orderForm.price > 0 
-      ? usdtAsset.available / orderForm.price 
-      : 0;
-    return maxQty.toFixed(4);
-  } else {
-    const pos = positions.value.find(p => p.symbol === orderForm.symbol);
-    return pos ? pos.quantity.toString() : '0';
-  }
-});
+const currentQuote = computed(() => quotes.value.get(selectedSymbol.value))
 
 // Methods
-const formatNumber = (num: number): string => {
-  return num.toLocaleString('en-US', { maximumFractionDigits: 4 });
-};
-
-const formatPrice = (price: number): string => {
-  return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-const formatVolume = (vol: number): string => {
-  if (vol >= 1e8) return (vol / 1e8).toFixed(2) + '亿';
-  if (vol >= 1e4) return (vol / 1e4).toFixed(2) + '万';
-  return vol.toFixed(2);
-};
-
 const formatTime = (date: Date): string => {
-  return new Date(date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-};
+  return new Date(date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
 
-const getMarketPrice = (symbol: string): string => {
-  const q = quotes.value.get(symbol);
-  return q ? formatPrice(q.price) : '-';
-};
+const handleSelectMarket = (symbol: string) => {
+  selectedSymbol.value = symbol
+  orderForm.symbol = symbol
+  fetchQuote(symbol)
+}
 
-const selectSymbol = (symbol: string) => {
-  selectedSymbol.value = symbol;
-  orderForm.symbol = symbol;
-  // Fetch quote for newly selected symbol
-  fetchQuote(symbol);
-};
-
-const setQuantity = (ratio: number) => {
-  if (orderForm.side === 'BUY') {
-    const usdtAsset = assets.value.find(a => a.currency === 'USDT');
-    if (!usdtAsset || !currentQuote.value) return;
-    const maxQty = usdtAsset.available / (orderForm.price || currentQuote.value.price);
-    orderForm.quantity = Math.floor(maxQty * ratio * 10000) / 10000;
-  } else {
-    const pos = positions.value.find(p => p.symbol === orderForm.symbol);
-    if (pos) {
-      orderForm.quantity = Math.floor(pos.quantity * ratio * 10000) / 10000;
+const handleSubmitOrder = async (orderData: {
+  symbol: string
+  side: 'BUY' | 'SELL'
+  type: 'LIMIT' | 'MARKET'
+  price: number
+  quantity: number
+}) => {
+  // Use confirm dialog for order confirmation
+  const result = await confirm({
+    title: orderData.side === 'BUY' ? '确认买入' : '确认卖出',
+    message: `确定要${orderData.side === 'BUY' ? '买入' : '卖出'} ${orderData.symbol} 吗？`,
+    type: orderData.side === 'BUY' ? 'info' : 'warning',
+    confirmText: orderData.side === 'BUY' ? '确认买入' : '确认卖出',
+    cancelText: '取消',
+    detail: {
+      '交易品种': orderData.symbol,
+      '方向': orderData.side === 'BUY' ? '买入' : '卖出',
+      '订单类型': orderData.type === 'LIMIT' ? '限价' : '市价',
+      '价格': orderData.type === 'MARKET' ? (currentQuote.value?.price || 0).toFixed(2) : orderData.price.toFixed(2),
+      '数量': orderData.quantity.toString(),
+      '预估金额': (orderData.quantity * (orderData.type === 'MARKET' ? (currentQuote.value?.price || 0) : orderData.price)).toFixed(2) + ' USDT',
     }
+  })
+
+  if (!result) {
+    return
   }
-};
 
-const statusText = (status: string): string => {
-  const map: Record<string, string> = {
-    PENDING: '待报',
-    SUBMITTED: '已报',
-    PARTIAL_FILLED: '部分成交',
-    FILLED: '全部成交',
-    CANCELLED: '已撤',
-    REJECTED: '拒绝',
-  };
-  return map[status] || status;
-};
+  try {
+    await submitOrderToApi(orderData)
+    orderForm.quantity = 0
+    if (orderForm.type === 'LIMIT') {
+      orderForm.price = 0
+    }
+    await Promise.all([fetchAssets(), fetchPositions(), fetchOrders()])
+  } catch (error: any) {
+    console.error('Order failed:', error)
+  }
+}
 
-const canCancel = (status: string): boolean => {
-  return ['PENDING', 'SUBMITTED', 'PARTIAL_FILLED'].includes(status);
-};
-
-const openCloseDialog = (pos: Position) => {
-  closeDialog.position = pos;
-  closeDialog.quantity = pos.quantity;
-  closeDialog.visible = true;
-};
+const handleClosePosition = (position: Position) => {
+  closeDialog.position = position
+  closeDialog.quantity = position.quantity
+  closeDialog.visible = true
+}
 
 const confirmClosePosition = async () => {
-  if (!closeDialog.position) return;
-  
+  if (!closeDialog.position) return
+
+  const q = quotes.value.get(closeDialog.position.symbol)
+  const result = await confirm({
+    title: '确认平仓',
+    message: '此操作不可逆，确定要平掉该持仓吗？',
+    type: 'danger',
+    confirmText: '确认平仓',
+    cancelText: '再想想',
+    detail: {
+      '持仓ID': closeDialog.position.positionId,
+      '交易品种': closeDialog.position.symbol,
+      '数量': formatNumber(Math.abs(closeDialog.position.quantity)),
+      '当前价格': q ? formatPrice(q.price) : '-',
+      '预估盈亏': (closeDialog.position.unrealizedPnl >= 0 ? '+' : '') + formatNumber(closeDialog.position.unrealizedPnl),
+    }
+  })
+
+  if (!result) {
+    return
+  }
+
   try {
-    const q = quotes.value.get(closeDialog.position.symbol);
     await submitOrderToApi({
       symbol: closeDialog.position.symbol,
       side: closeDialog.position.quantity > 0 ? 'SELL' : 'BUY',
       type: 'MARKET',
       price: q?.price || 0,
       quantity: Math.abs(closeDialog.position.quantity),
-    });
-    closeDialog.visible = false;
-    await fetchPositions();
+    })
+    closeDialog.visible = false
+    await fetchPositions()
   } catch (e) {
-    errorMsg.value = '平仓失败';
+    console.error('Close position failed:', e)
   }
-};
+}
+
+const handleCancelOrder = async (orderId: string) => {
+  try {
+    await tradeApi.cancelOrder(orderId)
+    await fetchOrders()
+  } catch (error) {
+    console.error('Failed to cancel order:', error)
+  }
+}
 
 // API calls
 const fetchAssets = async () => {
   try {
-    const response = await tradeApi.getAssets(accountId);
+    const response = await tradeApi.getAssets(accountId)
     if (response.success) {
-      assets.value = response.data;
+      assets.value = response.data
     }
   } catch (error) {
-    console.error('Failed to fetch assets:', error);
+    console.error('Failed to fetch assets:', error)
   }
-};
+}
 
 const fetchPositions = async () => {
   try {
-    const response = await tradeApi.getPositions(accountId);
+    const response = await tradeApi.getPositions(accountId)
     if (response.success) {
-      positions.value = response.data;
+      positions.value = response.data
     }
   } catch (error) {
-    console.error('Failed to fetch positions:', error);
+    console.error('Failed to fetch positions:', error)
   }
-};
+}
 
 const fetchOrders = async () => {
   try {
-    const response = await tradeApi.getOrders(accountId);
+    const response = await tradeApi.getOrders(accountId)
     if (response.success) {
-      orders.value = response.data;
+      orders.value = response.data
     }
   } catch (error) {
-    console.error('Failed to fetch orders:', error);
+    console.error('Failed to fetch orders:', error)
   }
-};
+}
 
 const fetchQuote = async (symbol: string) => {
   try {
-    const response = await marketApi.getQuote(symbol);
+    const response = await marketApi.getQuote(symbol)
     if (response.code === 0) {
-      const data = response.data;
+      const data = response.data
       quotes.value.set(symbol, {
         symbol: data.symbol,
         price: data.lastPrice,
@@ -488,101 +356,52 @@ const fetchQuote = async (symbol: string) => {
         low: data.lowPrice,
         volume: data.volume,
         timestamp: new Date(),
-      });
+      })
     }
   } catch (error) {
-    console.error(`Failed to fetch quote for ${symbol}:`, error);
+    console.error(`Failed to fetch quote for ${symbol}:`, error)
   }
-};
+}
 
 const submitOrderToApi = async (orderData: {
-  symbol: string;
-  side: 'BUY' | 'SELL';
-  type: 'LIMIT' | 'MARKET';
-  price: number;
-  quantity: number;
+  symbol: string
+  side: 'BUY' | 'SELL'
+  type: 'LIMIT' | 'MARKET'
+  price: number
+  quantity: number
 }) => {
   const response = await tradeApi.placeOrder({
     accountId,
     ...orderData,
-  });
+  })
   if (!response.success) {
-    throw new Error(response.message || '下单失败');
+    throw new Error(response.message || '下单失败')
   }
-  return response.data;
-};
-
-const cancelOrder = async (orderId: string) => {
-  try {
-    await tradeApi.cancelOrder(orderId);
-    await fetchOrders();
-  } catch (error) {
-    console.error('Failed to cancel order:', error);
-  }
-};
-
-const submitOrder = async () => {
-  if (!orderForm.symbol) {
-    errorMsg.value = '请选择交易品种';
-    return;
-  }
-  if (orderForm.quantity <= 0) {
-    errorMsg.value = '请输入数量';
-    return;
-  }
-  if (orderForm.type === 'LIMIT' && orderForm.price <= 0) {
-    errorMsg.value = '请输入价格';
-    return;
-  }
-
-  errorMsg.value = '';
-  submitting.value = true;
-
-  try {
-    await submitOrderToApi({
-      symbol: orderForm.symbol,
-      side: orderForm.side,
-      type: orderForm.type,
-      price: orderForm.type === 'MARKET' ? (currentQuote.value?.price || 0) : orderForm.price,
-      quantity: orderForm.quantity,
-    });
-
-    orderForm.quantity = 0;
-    if (orderForm.type === 'LIMIT') {
-      orderForm.price = 0;
-    }
-    
-    await Promise.all([fetchAssets(), fetchPositions(), fetchOrders()]);
-  } catch (error: any) {
-    errorMsg.value = error.message || '下单失败';
-  } finally {
-    submitting.value = false;
-  }
-};
+  return response.data
+}
 
 // WebSocket
 const connectWebSocket = () => {
-  // Connect to BIZ-MARKET WebSocket
-  const wsUrl = import.meta.env.VITE_WS_URL || window.location.origin;
+  const wsUrl = import.meta.env.VITE_WS_URL || window.location.origin
   socket = io(wsUrl, {
     path: '/v1/market/stream',
     transports: ['websocket'],
     reconnection: true,
     reconnectionDelay: 1000,
-  });
+  })
 
   socket.on('connect', () => {
-    wsConnected.value = true;
-    console.log('Trading WebSocket connected');
+    wsConnected.value = true
+    console.log('Trading WebSocket connected')
 
-    // Subscribe to quotes for monitored symbols
     monitoredSymbols.forEach(sym => {
-      socket?.emit('subscribe', { symbol: sym, type: 'quote' });
-    });
+      socket?.emit('subscribe', { symbol: sym, type: 'quote' })
+    })
 
-    // Subscribe to account updates
-    socket?.emit('subscribe_trades', { accountId });
-  });
+    socket?.emit('subscribe_trades', { accountId })
+  })
+
+  socket.on('error', (error) => { console.error('WebSocket error:', error) })
 
   socket.on('quote', (data: { symbol: string; lastPrice: number; change: number; high: number; low: number; volume: number }) => {
     quotes.value.set(data.symbol, {
@@ -593,51 +412,49 @@ const connectWebSocket = () => {
       low: data.low,
       volume: data.volume,
       timestamp: new Date(),
-    });
+    })
 
-    // Auto-update order price for selected symbol
     if (data.symbol === selectedSymbol.value && orderForm.type === 'LIMIT' && orderForm.price === 0) {
-      orderForm.price = data.lastPrice;
+      orderForm.price = data.lastPrice
     }
-  });
+  })
 
   socket.on('trade', (data: any) => {
-    console.log('Trade update:', data);
-    // Refresh data on trade execution
-    fetchAssets();
-    fetchPositions();
-    fetchOrders();
-  });
+    console.log('Trade update:', data)
+    fetchAssets()
+    fetchPositions()
+    fetchOrders()
+  })
 
   socket.on('order_update', (data: any) => {
-    console.log('Order update:', data);
-    fetchOrders();
-  });
+    console.log('Order update:', data)
+    fetchOrders()
+  })
 
   socket.on('position_update', (data: any) => {
-    console.log('Position update:', data);
-    fetchPositions();
-  });
+    console.log('Position update:', data)
+    fetchPositions()
+  })
 
   socket.on('disconnect', () => {
-    wsConnected.value = false;
-    console.log('Trading WebSocket disconnected');
-  });
-};
+    wsConnected.value = false
+    console.log('Trading WebSocket disconnected')
+  })
+}
 
 // Simulate real-time quotes for demo
 const simulateQuotes = () => {
   const basePrices: Record<string, number> = {
     'BTC-USDT': 50000,
     'ETH-USDT': 3000,
-  };
+  }
 
   priceUpdateTimer = window.setInterval(() => {
     monitoredSymbols.forEach(sym => {
-      const base = basePrices[sym] || 50000;
-      const price = base + (Math.random() - 0.5) * 100;
-      const change = (Math.random() - 0.5) * 5;
-      
+      const base = basePrices[sym] || 50000
+      const price = base + (Math.random() - 0.5) * 100
+      const change = (Math.random() - 0.5) * 5
+
       quotes.value.set(sym, {
         symbol: sym,
         price: parseFloat(price.toFixed(2)),
@@ -646,99 +463,98 @@ const simulateQuotes = () => {
         low: parseFloat((price * 0.98).toFixed(2)),
         volume: Math.floor(1000000 + Math.random() * 5000000),
         timestamp: new Date(),
-      });
-    });
-  }, 2000);
-};
+      })
+    })
+  }, 2000)
+}
 
 // Fetch initial quotes for all monitored symbols
 const fetchInitialQuotes = async () => {
   for (const sym of monitoredSymbols) {
-    await fetchQuote(sym);
+    await fetchQuote(sym)
   }
-};
+}
 
 // Lifecycle
 onMounted(async () => {
-  // Fetch initial data from API
   await Promise.all([
     fetchAssets(),
     fetchPositions(),
     fetchOrders(),
     fetchInitialQuotes(),
-  ]);
+  ])
 
-  // Connect WebSocket for real-time updates
-  connectWebSocket();
+  connectWebSocket()
 
-  // Start simulated quotes only as fallback
-  // In production, real-time data should come through WebSocket
   if (quotes.value.size === 0) {
-    simulateQuotes();
+    simulateQuotes()
   }
-});
+})
 
 onUnmounted(() => {
   if (socket) {
-    socket.disconnect();
-    socket = null;
+    socket.disconnect()
+    socket = null
   }
   if (priceUpdateTimer) {
-    clearInterval(priceUpdateTimer);
+    clearInterval(priceUpdateTimer)
   }
-});
+})
 </script>
 
 <style scoped>
+@import '../styles/tokens.css';
+@import '../styles/responsive.css';
+
 .trading-panel {
-  padding: 16px;
-  background: #1a1a2e;
+  padding: var(--spacing-md);
+  background: var(--bg-primary);
   min-height: 100vh;
-  color: #e0e0e0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-md);
   padding-bottom: 12px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .account-info h2 {
   margin: 0;
-  font-size: 20px;
-  color: #fff;
+  font-size: var(--font-size-lg);
+  color: var(--text-primary);
 }
 
 .account-id {
-  font-size: 12px;
-  color: #888;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
 }
 
 .connection-status {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: #888;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
 }
 
 .connection-status.connected {
-  color: #4caf50;
+  color: var(--color-success);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #888;
+  background: var(--text-secondary);
 }
 
 .connection-status.connected .status-dot {
-  background: #4caf50;
+  background: var(--color-success);
   animation: pulse 2s infinite;
 }
 
@@ -750,24 +566,24 @@ onUnmounted(() => {
 .top-section {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
 .assets-section,
-.market-section,
-.positions-section,
-.order-section,
+.middle-section,
 .orders-section {
-  background: #16213e;
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
 }
 
-h3 {
+.assets-section h3,
+.middle-section h3,
+.orders-section h3 {
   margin: 0 0 12px 0;
-  font-size: 14px;
-  color: #888;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
@@ -778,319 +594,69 @@ h3 {
 }
 
 .asset-card {
-  background: #1a1a2e;
+  background: var(--bg-primary);
   padding: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   text-align: center;
 }
 
 .asset-currency {
-  font-size: 12px;
-  color: #ffd700;
+  font-size: var(--font-size-xs);
+  color: #D4AF37;
   margin-bottom: 4px;
 }
 
 .asset-available {
-  font-size: 18px;
+  font-size: var(--font-size-lg);
   font-weight: bold;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .asset-locked {
   font-size: 11px;
-  color: #888;
+  color: var(--text-secondary);
   margin-top: 2px;
-}
-
-.market-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.tab-btn {
-  padding: 6px 16px;
-  border: 1px solid #333;
-  background: transparent;
-  color: #888;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s;
-}
-
-.tab-btn.active {
-  background: #e94560;
-  border-color: #e94560;
-  color: #fff;
-}
-
-.market-data {
-  text-align: center;
-}
-
-.quote-price {
-  font-size: 32px;
-  font-weight: bold;
-  margin-bottom: 4px;
-}
-
-.quote-price.up { color: #f23645; }
-.quote-price.down { color: #089981; }
-
-.quote-change {
-  font-size: 14px;
-  margin-bottom: 12px;
-}
-
-.quote-change.up { color: #f23645; }
-.quote-change.down { color: #089981; }
-
-.quote-details {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  font-size: 12px;
-  color: #888;
 }
 
 .middle-section {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
-.positions-table,
-.orders-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
+.loading {
+  text-align: center;
+  padding: var(--spacing-lg);
+  color: var(--text-secondary);
 }
 
-.positions-table th,
-.orders-table th {
-  text-align: left;
-  padding: 8px;
-  color: #888;
-  font-weight: normal;
-  border-bottom: 1px solid #333;
-}
-
-.positions-table td,
-.orders-table td {
-  padding: 8px;
-  border-bottom: 1px solid #262a3f;
-}
-
-.symbol-cell {
-  color: #ffd700;
-}
-
-.profit { color: #f23645; }
-.loss { color: #089981; }
+.profit { color: var(--color-rise); }
+.loss { color: var(--color-fall); }
 
 .btn-sell,
 .btn-buy {
-  padding: 4px 12px;
+  padding: var(--spacing-xs) 12px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   transition: opacity 0.2s;
 }
 
 .btn-sell {
-  background: #089981;
-  color: #fff;
+  background: var(--color-fall);
+  color: var(--text-primary);
 }
 
 .btn-buy {
-  background: #f23645;
-  color: #fff;
+  background: var(--color-rise);
+  color: var(--text-primary);
 }
 
 .btn-sell:hover,
 .btn-buy:hover {
   opacity: 0.8;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: #666;
-}
-
-.order-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.symbol-display {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: #1a1a2e;
-  border-radius: 4px;
-}
-
-.symbol-display .label {
-  color: #888;
-  font-size: 12px;
-}
-
-.symbol-display .value {
-  color: #ffd700;
-  font-weight: bold;
-}
-
-.order-type-selector,
-.order-kind-selector {
-  display: flex;
-  gap: 8px;
-}
-
-.type-btn,
-.kind-btn {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #333;
-  background: transparent;
-  color: #888;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.type-btn.active {
-  background: #f23645;
-  border-color: #f23645;
-  color: #fff;
-}
-
-.kind-btn.active {
-  background: #e94560;
-  border-color: #e94560;
-  color: #fff;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.form-group label {
-  font-size: 12px;
-  color: #888;
-}
-
-.form-group input {
-  padding: 10px 12px;
-  background: #1a1a2e;
-  border: 1px solid #333;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 14px;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: #e94560;
-}
-
-.quick-amounts {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-
-.quick-amounts button {
-  padding: 6px;
-  background: #262a3f;
-  border: 1px solid #333;
-  border-radius: 4px;
-  color: #888;
-  cursor: pointer;
-  font-size: 11px;
-  transition: all 0.2s;
-}
-
-.quick-amounts button:hover {
-  background: #333;
-  color: #fff;
-}
-
-.order-summary {
-  background: #1a1a2e;
-  padding: 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #888;
-}
-
-.order-summary div {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.order-summary span {
-  color: #fff;
-}
-
-.btn-submit {
-  padding: 14px;
-  border: none;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.btn-submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.error-msg {
-  color: #f23645;
-  font-size: 12px;
-  text-align: center;
-  padding: 8px;
-  background: rgba(242, 54, 69, 0.1);
-  border-radius: 4px;
-}
-
-.loading {
-  text-align: center;
-  padding: 20px;
-  color: #666;
-}
-
-.status-submitted { color: #2196f3; }
-.status-partial_filled { color: #ff9800; }
-.status-filled { color: #4caf50; }
-.status-cancelled { color: #888; }
-.status-rejected { color: #f23645; }
-
-.btn-cancel {
-  padding: 4px 10px;
-  background: transparent;
-  border: 1px solid #f23645;
-  color: #f23645;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-  transition: all 0.2s;
-}
-
-.btn-cancel:hover {
-  background: #f23645;
-  color: #fff;
 }
 
 .dialog-overlay {
@@ -1107,47 +673,138 @@ h3 {
 }
 
 .dialog {
-  background: #16213e;
-  padding: 24px;
-  border-radius: 12px;
+  background: var(--bg-secondary);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
   min-width: 300px;
 }
 
 .dialog h3 {
-  margin-bottom: 16px;
-  color: #fff;
-  font-size: 18px;
+  margin-bottom: var(--spacing-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
 }
 
 .dialog-content p {
-  margin: 8px 0;
-  font-size: 14px;
+  margin: var(--spacing-sm) 0;
+  font-size: var(--font-size-sm);
   color: #ccc;
 }
 
 .dialog-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 20px;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
 }
 
 .dialog-actions button {
   flex: 1;
   padding: 12px;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition: opacity 0.2s;
 }
 
 .dialog-actions .btn-cancel {
   background: transparent;
-  border: 1px solid #888;
-  color: #888;
+  border: 1px solid var(--text-secondary);
+  color: var(--text-secondary);
 }
 
 .dialog-actions .btn-cancel:hover {
-  background: #888;
-  color: #fff;
+  background: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+/* Mobile order form overlay */
+.mobile-mode .mobile-sheet-trigger {
+  position: fixed;
+  bottom: calc(var(--spacing-lg) + env(safe-area-inset-bottom, 0px));
+  right: var(--spacing-lg);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  font-size: var(--font-size-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+}
+
+/* Ensure no horizontal overflow */
+.trading-panel {
+  overflow-x: hidden;
+}
+
+/* Responsive */
+@media (max-width: 767px) {
+  .trading-panel {
+    padding: var(--spacing-sm);
+  }
+
+  .panel-header {
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+  }
+
+  .account-info {
+    flex: 1;
+  }
+
+  .account-info h2 {
+    font-size: var(--font-size-md);
+  }
+
+  .top-section {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .assets-section,
+  .market-section {
+    padding: var(--spacing-sm);
+  }
+
+  .assets-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .asset-card {
+    padding: 8px;
+  }
+
+  .asset-available {
+    font-size: var(--font-size-md);
+  }
+
+  .middle-section {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .positions-section,
+  .order-section {
+    padding: var(--spacing-sm);
+  }
+
+  .orders-section {
+    padding: var(--spacing-sm);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .top-section {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+  }
+
+  .middle-section {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+  }
+
+  .assets-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>

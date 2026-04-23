@@ -30,7 +30,10 @@ spec:
             - name: POSTGRES_USER
               value: "devuser"
             - name: POSTGRES_PASSWORD
-              value: "dev_password_change_me"
+              valueFrom:
+                secretKeyRef:
+                  name: qts-secrets
+                  key: DB_PASSWORD
             - name: POSTGRES_DB
               value: "qts_trade"
           args:

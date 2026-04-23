@@ -1,0 +1,78 @@
+/* 中国传统风格主题 */
+/* 中国风配色系统扩展 - 故宫、敦煌、水墨灵感 */
+
+:root[data-theme="chinese-traditional"] {
+  /* 背景 - 墨色系 */
+  --bg-primary: var(--chinese-ink);
+  --bg-secondary: var(--chinese-ink-light);
+  --bg-elevated: #333333;
+  --bg-surface: var(--chinese-cream);
+  --bg-gradient: var(--chinese-ink-gradient);
+
+  /* 文字 - 宣纸白 */
+  --text-primary: var(--chinese-cream);
+  --text-secondary: rgba(245, 245, 220, 0.7);
+  --text-surface: var(--chinese-ink);
+  --text-surface-secondary: rgba(26, 26, 26, 0.7);
+
+  /* 强调色 - 琉璃金 */
+  --color-accent: var(--chinese-gold);
+  --color-accent-light: var(--chinese-gold-light);
+  --color-rise: var(--chinese-red);
+  --color-fall: var(--chinese-green);
+
+  /* 边框 - 金色点缀 */
+  --border-default: rgba(212, 175, 55, 0.3);
+  --border-light: rgba(212, 175, 55, 0.15);
+  --border-accent: var(--chinese-gold);
+
+  /* 阴影 - 墨色阴影 */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-gold: 0 4px 20px rgba(212, 175, 55, 0.3);
+
+  /* 字体 */
+  --font-display: var(--font-chinese-display);
+  --font-sans: var(--font-chinese);
+  --font-mono: 'SF Mono', 'Consolas', monospace;
+
+  /* 圆角 - 较小更方正 */
+  --radius-sm: var(--chinese-radius-sm);
+  --radius-md: var(--chinese-radius-md);
+  --radius-lg: var(--chinese-radius-lg);
+
+  /* 间距 */
+  --spacing-xs: var(--chinese-spacing-tight);
+  --spacing-sm: var(--chinese-spacing-tight);
+  --spacing-md: var(--chinese-spacing-normal);
+  --spacing-lg: var(--chinese-spacing-loose);
+  --spacing-xl: var(--chinese-spacing-expansive);
+
+  /* 纹样背景 */
+  --bg-pattern-cloud: var(--pattern-cloud);
+  --bg-pattern-wave: var(--pattern-wave);
+  --bg-pattern-bamboo: var(--pattern-bamboo);
+}
+
+/* 中国风按钮样式增强 */
+:root[data-theme="chinese-traditional"] .btn-accent {
+  background: linear-gradient(135deg, var(--chinese-gold) 0%, var(--chinese-gold-dark) 100%);
+  border: 1px solid var(--chinese-gold-light);
+  box-shadow: var(--shadow-gold);
+}
+
+/* 中国风卡片装饰 */
+:root[data-theme="chinese-traditional"] .card-chinese {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--chinese-radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+/* 中国风标题样式 */
+:root[data-theme="chinese-traditional"] .title-chinese {
+  font-family: var(--font-chinese-display);
+  color: var(--chinese-gold);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
