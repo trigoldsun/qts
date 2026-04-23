@@ -2,9 +2,14 @@ package com.qts.biz.risk.precheck;
 
 import com.qts.biz.risk.precheck.dto.PreCheckRequest;
 import com.qts.biz.risk.precheck.dto.PreCheckResponse;
+import com.qts.biz.risk.precheck.service.AssetService;
+import com.qts.biz.risk.precheck.service.MarketDataService;
+import com.qts.biz.risk.precheck.service.PositionService;
 import com.qts.biz.risk.precheck.validator.ValidationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -12,6 +17,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for PreCheckService
@@ -25,9 +32,19 @@ class PreCheckServiceTest {
 
     private PreCheckService preCheckService;
 
+    @Mock
+    private PositionService positionService;
+
+    @Mock
+    private AssetService assetService;
+
+    @Mock
+    private MarketDataService marketDataService;
+
     @BeforeEach
     void setUp() {
-        preCheckService = new PreCheckService();
+        MockitoAnnotations.openMocks(this);
+        preCheckService = new PreCheckService(positionService, assetService, marketDataService);
     }
 
     /**
